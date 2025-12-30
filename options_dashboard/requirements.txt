@@ -1,0 +1,6 @@
+schwabdev
+pandas
+numpy
+scipy
+matplotlib
+altair

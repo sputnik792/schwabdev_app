@@ -1,0 +1,11 @@
+APP_KEY = ""
+SECRET = ""
+CALLBACK_URL = "https://127.0.0.1:8182/callback"
+TOKEN_FILE = "tokens.json"
+
+RISK_FREE_RATE = 0.05
+DIVIDEND_YIELD = 0.015
+CONTRACT_MULTIPLIER = 100
+
+MAX_TICKERS = 20
+PRESET_FILE = "preset_tickers.json"
