@@ -1,7 +1,10 @@
 from tkinter import messagebox
 
-def error(msg):
-    messagebox.showerror("Error", msg)
+def info(title, message):
+    messagebox.showinfo(title, message)
 
-def info(msg):
-    messagebox.showinfo("Info", msg)
+def warning(title, message):
+    messagebox.showwarning(title, message)
+
+def error(title, message):
+    messagebox.showerror(title, message)
