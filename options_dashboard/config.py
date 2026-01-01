@@ -1,6 +1,6 @@
 APP_KEY = ""
 SECRET = ""
-CALLBACK_URL = "https://127.0.0.1:8182/callback"
+CALLBACK_URL = "https://127.0.0.1"
 TOKEN_FILE = "tokens.json"
 
 RISK_FREE_RATE = 0.05

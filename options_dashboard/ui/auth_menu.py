@@ -1,44 +1,66 @@
-import os
 import tkinter as tk
 from tkinter import ttk
-from ui import dialogs
-from data.schwab_auth import create_client
-from config import TOKEN_FILE
+import webbrowser
 
+from ui import dialogs
+from data.schwab_auth import (
+    create_client,
+    get_auth_url,
+    complete_auth_from_redirect
+)
 
 class AuthMenu(tk.Frame):
     def __init__(self, root, on_authenticated):
         super().__init__(root)
+        self.root = root
         self.on_authenticated = on_authenticated
+        self.client = None
 
-        tk.Label(self, text="Schwab Option Dashboard", font=("Arial", 18, "bold")).pack(pady=16)
+        tk.Label(
+            self,
+            text="Schwab Authentication",
+            font=("Arial", 16, "bold")
+        ).pack(pady=12)
 
-        self.status_var = tk.StringVar(value=self._token_status())
-        tk.Label(self, textvariable=self.status_var).pack(pady=6)
+        ttk.Button(
+            self,
+            text="Start Schwab Login",
+            command=self.start_login
+        ).pack(pady=6)
 
-        btns = tk.Frame(self)
-        btns.pack(pady=8)
+        tk.Label(
+            self,
+            text="After login, paste the FULL redirect URL here:"
+        ).pack(pady=(12, 4))
 
-        ttk.Button(btns, text="Connect to Schwab", command=self.connect).pack(side=tk.LEFT, padx=6)
-        ttk.Button(btns, text="Delete token.json", command=self.delete_token).pack(side=tk.LEFT, padx=6)
+        self.url_box = tk.Text(self, height=4, width=90)
+        self.url_box.pack(padx=10)
+
+        ttk.Button(
+            self,
+            text="Complete Login",
+            command=self.complete_login
+        ).pack(pady=10)
 
         self.pack(fill="both", expand=True)
 
-    def _token_status(self):
-        return "Token found." if os.path.exists(TOKEN_FILE) else "No token found."
-
-    def delete_token(self):
+    def start_login(self):
         try:
-            if os.path.exists(TOKEN_FILE):
-                os.remove(TOKEN_FILE)
-            self.status_var.set(self._token_status())
-            dialogs.info("Token Deleted", "token.json has been removed.")
+            self.client = create_client()
+            url = get_auth_url(self.client)
+            webbrowser.open(url)
         except Exception as e:
             dialogs.error("Error", str(e))
 
-    def connect(self):
+    def complete_login(self):
         try:
-            client = create_client()
+            redirect_url = self.url_box.get("1.0", "end").strip()
+            if not redirect_url:
+                dialogs.warning("Missing URL", "Please paste the redirect URL.")
+                return
+
+            client = complete_auth_from_redirect(self.client, redirect_url)
             self.on_authenticated(client)
+
         except Exception as e:
             dialogs.error("Authentication Failed", str(e))
