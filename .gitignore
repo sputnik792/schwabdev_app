@@ -1,2 +1,3 @@
 *.pyc
 tokens.json
+*.pem
