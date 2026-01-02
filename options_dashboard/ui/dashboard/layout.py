@@ -67,6 +67,12 @@ def build_sidebar(self):
         width=160
     ).pack(pady=(0, 15))
 
+    ctk.CTkButton(
+        self.sidebar,
+        text="Stats Breakdown",
+        command=self.open_stats
+    ).pack(fill="x", padx=10, pady=6)
+
     # Exposure model
     self.model_var = tk.StringVar(value="Gamma")
     ctk.CTkLabel(self.sidebar, text="Exposure Model").pack(pady=(0, 5))
@@ -115,7 +121,7 @@ def build_sidebar(self):
         command=self.load_csv_index_data
     ).pack(fill="x", padx=10, pady=10)
 
-    ctk.CTkFrame(self.sidebar, height=1).pack(fill="x", pady=14)
+    ctk.CTkFrame(self.sidebar, height=1).pack(fill="x", pady=5)
     # ----------------------------------
     # Color Theme Selector
     # ----------------------------------
@@ -146,7 +152,7 @@ def build_sidebar(self):
 
     theme_dropdown.pack(pady=(0, 12))
 
-    ctk.CTkFrame(self.sidebar, height=1).pack(fill="x", pady=14)
+    ctk.CTkFrame(self.sidebar, height=1).pack(fill="x", pady=5)
 
     # Icon label (dynamic)
     theme_icon = ctk.CTkLabel(

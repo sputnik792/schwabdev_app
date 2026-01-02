@@ -48,6 +48,46 @@ def fetch_worker(self, symbol):
             lambda: dialogs.error("Error", f"{symbol}: {e}")
         )
 
+def fetch_single_symbol(dashboard, symbol):
+    symbol = symbol.strip().upper()
+    if not symbol:
+        return
+
+    def worker():
+        try:
+            price = fetch_stock_price(dashboard.client, symbol)
+            exp_map, expirations = fetch_option_chain(dashboard.client, symbol)
+
+            state = TickerState(
+                symbol=symbol,
+                price=price,
+                exp_data_map=exp_map,
+                last_updated=datetime.datetime.now()
+            )
+
+            def update():
+                dashboard.ticker_data[symbol] = state
+
+                if symbol not in dashboard.ticker_tabs:
+                    dashboard.preset_tickers.append(symbol)
+                    dashboard.rebuild_tabs()
+
+                ui = dashboard.ticker_tabs[symbol]
+                ui["price_var"].set(f"${price:.2f}")
+                ui["exp_dropdown"]["values"] = expirations
+                ui["exp_var"].set(expirations[0])
+
+                dashboard.update_table_for_symbol(symbol, expirations[0])
+
+            dashboard.root.after(0, update)
+
+        except Exception as e:
+            dashboard.root.after(
+                0, lambda: dialogs.error("Fetch Error", str(e))
+            )
+
+    threading.Thread(target=worker, daemon=True).start()
+
 def fetch_all_stocks(self):
     for symbol in self.preset_tickers:
         threading.Thread(

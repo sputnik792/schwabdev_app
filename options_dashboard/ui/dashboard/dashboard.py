@@ -19,6 +19,9 @@ from ui.dashboard.data_controller import fetch_worker, fetch_all_stocks, load_cs
 from ui.dashboard.refresh import start_auto_refresh, auto_refresh_price, auto_refresh_options
 from ui.dashboard.charts_controller import generate_selected_chart, generate_chart_group
 from style.custom_theme_controller import register_theme_change_callback
+from ui.dashboard.single_stock_panel import build_single_stock_panel
+from ui.dashboard.stats_modal import open_stats_modal
+
 
 class Dashboard(ctk.CTkFrame):
     def __init__(self, root, client):
@@ -31,7 +34,7 @@ class Dashboard(ctk.CTkFrame):
         self.ticker_tabs = {}
         self.ticker_data = {}
 
-        # ---- bind controllers ----
+        # ---- binding controllers ----
         self.build_layout = build_layout.__get__(self)
         self.rebuild_tabs = rebuild_tabs.__get__(self)
         self.create_stock_tab = create_stock_tab.__get__(self)
@@ -48,14 +51,15 @@ class Dashboard(ctk.CTkFrame):
 
         self.generate_selected_chart = generate_selected_chart.__get__(self)
         self.generate_chart_group = generate_chart_group.__get__(self)
+        #---- end of binding controllers
 
         # ---- layout ----
         self.pack(fill="both", expand=True)
         self.build_layout()
+        build_single_stock_panel(self)
         register_theme_change_callback(self.rebuild)
         self.rebuild_tabs()
         self.start_auto_refresh()
-        # register_theme_change_callback(self.rebuild)
 
     def rebuild(self):
         self.destroy()
@@ -105,3 +109,11 @@ class Dashboard(ctk.CTkFrame):
             win.destroy()
 
         ctk.CTkButton(win, text="Save", command=save).pack(pady=10)
+
+    def open_stats(self):
+        tab_id = self.notebook.select()
+        symbol = self.notebook.tab(tab_id, "text")
+        state = self.ticker_data.get(symbol)
+        exp = self.ticker_tabs[symbol]["exp_var"].get()
+
+        open_stats_modal(self.root, state, exp)

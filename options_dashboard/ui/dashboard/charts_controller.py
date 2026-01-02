@@ -1,6 +1,15 @@
 import customtkinter as ctk
 import tkinter as tk
 from ui import dialogs
+from models.greeks import gamma, vanna, volga, charm, vega
+from models.exposure import gamma_exposure, vanna_exposure, volga_exposure, charm_exposure
+
+from ui.charts import build_exposure_dataframe, generate_altair_chart, embed_matplotlib_chart
+from utils.time import time_to_expiration
+from models.dealer import find_zero_gamma
+from config import RISK_FREE_RATE, DIVIDEND_YIELD
+from ui.charts import open_altair_chart
+from ui.controls import spot_slider
 
 def generate_selected_chart(self, spot_override=None):
     tab_id = self.notebook.select()
@@ -20,24 +29,9 @@ def generate_selected_chart(self, spot_override=None):
 
     spot = spot_override if spot_override else state.price
 
-    from models.greeks import gamma, vanna, volga, charm
-    from models.exposure import (
-        gamma_exposure,
-        vanna_exposure,
-        volga_exposure,
-        charm_exposure
-    )
-    from ui.charts import (
-        build_exposure_dataframe,
-        generate_altair_chart,
-        embed_matplotlib_chart
-    )
-    from utils.time import time_to_expiration
-    from models.dealer import find_zero_gamma
-    from config import RISK_FREE_RATE, DIVIDEND_YIELD
-
     T = time_to_expiration(exp)
 
+    CONTRACT_MULT = 100
     rows = []
     for _, row in state.exp_data_map[exp].iterrows():
         K = float(row["Strike"])
@@ -45,34 +39,42 @@ def generate_selected_chart(self, spot_override=None):
             continue
 
         for opt in ("CALL", "PUT"):
-            iv = float(row.get(f"IV_{opt}", 0) or 0.2)
-            oi = float(row.get(f"OI_{opt}", 0) or 1)
+            iv = float(row.get(f"IV_{opt}", 0) or 0)
+            oi = float(row.get(f"OI_{opt}", 0) or 0)
             if iv <= 0 or oi <= 0:
                 continue
 
             sign = 1 if opt == "CALL" else -1
 
+            # ---------- GAMMA ----------
             if self.model_var.get() == "Gamma":
                 g = gamma(spot, K, T, RISK_FREE_RATE, DIVIDEND_YIELD, iv)
-                exp_val = gamma_exposure(g, spot, oi)
+                scale = oi * CONTRACT_MULT * (spot ** 2) * 0.01
+                exp_val = sign * g * scale   # ONLY gamma uses sign flip
 
+            # ---------- VANNA ----------
             elif self.model_var.get() == "Vanna":
                 v = vanna(spot, K, T, RISK_FREE_RATE, DIVIDEND_YIELD, iv)
-                exp_val = vanna_exposure(v, spot, iv, oi)
+                scale = oi * CONTRACT_MULT * spot * iv
+                exp_val = sign * abs(v) * scale
 
+            # ---------- VOLGA ----------
             elif self.model_var.get() == "Volga":
                 vg = volga(spot, K, T, RISK_FREE_RATE, DIVIDEND_YIELD, iv)
-                ve = gamma(spot, K, T, RISK_FREE_RATE, DIVIDEND_YIELD, iv)
-                exp_val = volga_exposure(vg, ve, oi)
+                ve = vega(spot, K, T, RISK_FREE_RATE, DIVIDEND_YIELD, iv)
+                scale = oi * ve
+                exp_val = sign * abs(vg) * scale
 
+            # ---------- CHARM ----------
             else:  # Charm
                 c = charm(spot, K, T, RISK_FREE_RATE, DIVIDEND_YIELD, iv)
-                exp_val = charm_exposure(c, spot, oi)
+                scale = oi * CONTRACT_MULT * spot
+                exp_val = sign * abs(c) * scale
 
             rows.append({
                 "Strike": K,
                 "Type": opt,
-                "Exposure": sign * exp_val
+                "Exposure": exp_val
             })
 
     if not rows:
@@ -106,7 +108,6 @@ def generate_selected_chart(self, spot_override=None):
             total,
             zero_gamma
         )
-        from ui.charts import open_altair_chart
         open_altair_chart(chart, symbol, exp)
     else:
         win = ctk.CTkToplevel(self.root)
@@ -122,7 +123,6 @@ def generate_selected_chart(self, spot_override=None):
         )
 
     # Spot slider
-    from ui.controls import spot_slider
     for w in self.sidebar.winfo_children():
         if isinstance(w, (tk.Scale, ctk.CTkSlider)):
             w.destroy()
