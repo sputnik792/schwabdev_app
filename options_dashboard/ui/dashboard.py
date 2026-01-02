@@ -10,7 +10,8 @@ from state.ticker_state import TickerState
 from ui import dialogs
 from data.schwab_api import fetch_stock_price, fetch_option_chain
 from data.csv_loader import load_csv_index
-
+from data.schwab_auth import reset_schwab_tokens
+from ui import dialogs
 
 class Dashboard(tk.Frame):
     def __init__(self, root, client):
@@ -53,6 +54,32 @@ class Dashboard(tk.Frame):
         except Exception as e:
             dialogs.error("Error", f"Failed to save presets:\n{e}")
 
+    def reconnect_schwab(self):
+        confirm = dialogs.ask_yes_no(
+            "Reconnect Schwab",
+            "This will log you out of Schwab and require re-authentication.\n\nContinue?"
+        )
+
+        if not confirm:
+            return
+
+        deleted = reset_schwab_tokens()
+
+        if deleted:
+            dialogs.info(
+                "Schwab Disconnected",
+                "Schwab tokens deleted.\n\nPlease restart the application to re-authenticate."
+            )
+        else:
+            dialogs.info(
+                "No Tokens Found",
+                "No Schwab tokens were found.\n\nPlease restart the application."
+            )
+
+        # Close the app cleanly
+        self.master.destroy()
+
+
     # =========================
     # Layout
     # =========================
@@ -60,6 +87,13 @@ class Dashboard(tk.Frame):
     def build_layout(self):
         self.top_bar = tk.Frame(self)
         self.top_bar.pack(fill=tk.X, pady=4)
+
+        reconnect_btn = tk.Button(
+            self,
+            text="Reconnect Schwab",
+            command=self.reconnect_schwab
+        )
+        reconnect_btn.pack(anchor="ne", padx=10, pady=5)
 
         ttk.Button(
             self.top_bar,

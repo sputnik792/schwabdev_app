@@ -1,15 +1,26 @@
 import tkinter as tk
+
 from ui.auth_menu import AuthMenu
 from ui.dashboard import Dashboard
+from data.schwab_auth import try_create_client_with_tokens
+
 
 def start_dashboard(client):
     auth.destroy()
-    dashboard = Dashboard(root, client)
-    dashboard.pack(fill="both", expand=True)
+    Dashboard(root, client)
+
 
 root = tk.Tk()
-root.title("Schwab Option Chain Dashboard")
-root.geometry("1400x800")
+root.title("Options Dashboard")
 
-auth = AuthMenu(root, start_dashboard)
+# 🔑 AUTO-AUTH CHECK
+client = try_create_client_with_tokens()
+
+if client:
+    # Tokens exist and are valid → skip auth UI
+    Dashboard(root, client)
+else:
+    # No valid tokens → show auth UI
+    auth = AuthMenu(root, start_dashboard)
+
 root.mainloop()

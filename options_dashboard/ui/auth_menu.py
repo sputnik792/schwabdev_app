@@ -3,24 +3,26 @@ from tkinter import ttk
 import webbrowser
 
 from ui import dialogs
+from config import APP_KEY, CALLBACK_URL
 from data.schwab_auth import (
-    create_client,
-    get_auth_url,
-    complete_auth_from_redirect
+    run_oauth_subprocess,
+    create_authenticated_client
 )
+
 
 class AuthMenu(tk.Frame):
     def __init__(self, root, on_authenticated):
         super().__init__(root)
-        self.root = root
         self.on_authenticated = on_authenticated
-        self.client = None
 
         tk.Label(
             self,
             text="Schwab Authentication",
             font=("Arial", 16, "bold")
         ).pack(pady=12)
+
+        self.status = tk.StringVar(value="Status: Not authenticated")
+        tk.Label(self, textvariable=self.status).pack(pady=6)
 
         ttk.Button(
             self,
@@ -30,7 +32,7 @@ class AuthMenu(tk.Frame):
 
         tk.Label(
             self,
-            text="After login, paste the FULL redirect URL here:"
+            text="Paste the FULL redirect URL here:"
         ).pack(pady=(12, 4))
 
         self.url_box = tk.Text(self, height=4, width=90)
@@ -45,21 +47,28 @@ class AuthMenu(tk.Frame):
         self.pack(fill="both", expand=True)
 
     def start_login(self):
-        try:
-            self.client = create_client()
-            url = get_auth_url(self.client)
-            webbrowser.open(url)
-        except Exception as e:
-            dialogs.error("Error", str(e))
+        auth_url = (
+            "https://api.schwabapi.com/v1/oauth/authorize"
+            f"?client_id={APP_KEY}"
+            f"&redirect_uri={CALLBACK_URL}"
+            "&response_type=code"
+        )
+
+        webbrowser.open(auth_url)
+        self.status.set("Status: Login started — complete in browser")
 
     def complete_login(self):
-        try:
-            redirect_url = self.url_box.get("1.0", "end").strip()
-            if not redirect_url:
-                dialogs.warning("Missing URL", "Please paste the redirect URL.")
-                return
+        redirect_url = self.url_box.get("1.0", "end").strip()
+        if not redirect_url:
+            dialogs.warning("Missing URL", "Paste the redirect URL.")
+            return
 
-            client = complete_auth_from_redirect(self.client, redirect_url)
+        try:
+            self.status.set("Status: Completing OAuth...")
+            run_oauth_subprocess(redirect_url)
+
+            client = create_authenticated_client()
+            self.status.set("Status: Authenticated")
             self.on_authenticated(client)
 
         except Exception as e:

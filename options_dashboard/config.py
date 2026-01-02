@@ -1,5 +1,5 @@
-APP_KEY = ""
-SECRET = ""
+APP_KEY = "NWy77tZSfVAMzZBMkZ6HBoliNH7NX6Rh"
+SECRET = "448aaPGZUahJKaMv"
 CALLBACK_URL = "https://127.0.0.1"
 TOKEN_FILE = "tokens.json"
 

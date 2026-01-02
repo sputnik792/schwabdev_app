@@ -8,3 +8,6 @@ def warning(title, message):
 
 def error(title, message):
     messagebox.showerror(title, message)
+
+def ask_yes_no(title, message):
+    return messagebox.askyesno(title, message)
