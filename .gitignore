@@ -1,4 +1,10 @@
 *.pyc
-*.json
 *.pem
 *.csv
+*.txt
+
+# ignore all .jsons
+*.json
+# except for:
+US_stock_symbols_verbose.json
+US_stock_symbols.json

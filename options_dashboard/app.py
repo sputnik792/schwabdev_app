@@ -28,8 +28,8 @@ def start_dashboard(client):
 # -----------------------------
 root = ctk.CTk()
 root.title("Options Dashboard")
-root.geometry("1400x800")
-root.minsize(1200, 700)
+root.geometry("1400x700")
+root.minsize(1200, 650)
 
 if schwab_tokens_exist():
     client = create_authenticated_client()
