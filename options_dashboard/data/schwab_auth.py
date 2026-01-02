@@ -1,34 +1,19 @@
-# data/schwab_auth.py
-import subprocess
-import sys
 import os
+import sys
+import subprocess
 import shutil
+import tempfile
 import schwabdev
-
 from config import APP_KEY, SECRET, CALLBACK_URL
 
-def reset_schwab_tokens():
-    token_dir = os.path.expanduser("~/.schwabdev")
-
-    if os.path.exists(token_dir):
-        shutil.rmtree(token_dir)
-        return True
-
-    return False
-
-def try_create_client_with_tokens():
-    """
-    Try to create a Schwab client using existing tokens.
-    Returns client if successful, or None if auth is required.
-    """
-    try:
-        return schwabdev.Client(APP_KEY, SECRET, CALLBACK_URL)
-    except Exception:
-        return None
+# -----------------------------
+# OAuth subprocess bridge
+# -----------------------------
 
 def run_oauth_subprocess(redirect_url: str):
     """
-    Runs the OAuth helper and feeds it the redirect URL via stdin.
+    Run schwabdev OAuth in a separate process and feed the redirect URL
+    to its stdin (this satisfies schwabdev's input()).
     """
     helper_path = os.path.join(
         os.path.dirname(__file__),
@@ -43,18 +28,57 @@ def run_oauth_subprocess(redirect_url: str):
         text=True
     )
 
-    # Feed the redirect URL exactly once
-    stdout, stderr = proc.communicate(redirect_url + "\n", timeout=60)
+    stdout, stderr = proc.communicate(
+        redirect_url.strip() + "\n",
+        timeout=60
+    )
 
     if proc.returncode != 0:
         raise RuntimeError(
-            f"OAuth helper failed:\n{stderr or stdout}"
+            "OAuth helper failed:\n"
+            f"{stderr or stdout}"
         )
-
 
 def create_authenticated_client():
     """
-    Called AFTER OAuth helper succeeds.
-    Tokens already exist, so no prompts.
+    Create a Schwab client assuming valid tokens already exist.
     """
     return schwabdev.Client(APP_KEY, SECRET, CALLBACK_URL)
+
+def schwab_tokens_exist():
+    token_dir = os.path.expanduser("~/.schwabdev")
+    token_db = os.path.join(token_dir, "tokens.db")
+    return os.path.exists(token_db)
+
+
+def create_authenticated_client():
+    return schwabdev.Client(APP_KEY, SECRET, CALLBACK_URL)
+# -----------------------------
+# Token reset (Windows-safe)
+# -----------------------------
+
+RESET_FLAG = os.path.join(
+    tempfile.gettempdir(),
+    "schwab_reset.flag"
+)
+
+
+def mark_schwab_reset():
+    with open(RESET_FLAG, "w") as f:
+        f.write("reset")
+
+
+def perform_pending_reset():
+    """
+    Delete Schwab tokens on app startup before any client is created.
+    """
+    if not os.path.exists(RESET_FLAG):
+        return
+
+    token_dir = os.path.expanduser("~/.schwabdev")
+
+    try:
+        if os.path.exists(token_dir):
+            shutil.rmtree(token_dir)
+    finally:
+        os.remove(RESET_FLAG)

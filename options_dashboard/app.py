@@ -1,8 +1,15 @@
 import tkinter as tk
 
+from data.schwab_auth import (
+    perform_pending_reset,
+    schwab_tokens_exist,
+    create_authenticated_client
+)
 from ui.auth_menu import AuthMenu
 from ui.dashboard import Dashboard
-from data.schwab_auth import try_create_client_with_tokens
+
+
+perform_pending_reset()
 
 
 def start_dashboard(client):
@@ -13,14 +20,12 @@ def start_dashboard(client):
 root = tk.Tk()
 root.title("Options Dashboard")
 
-# 🔑 AUTO-AUTH CHECK
-client = try_create_client_with_tokens()
-
-if client:
-    # Tokens exist and are valid → skip auth UI
+if schwab_tokens_exist():
+    # Tokens exist → safe to create client
+    client = create_authenticated_client()
     Dashboard(root, client)
 else:
-    # No valid tokens → show auth UI
+    # No tokens → show auth UI
     auth = AuthMenu(root, start_dashboard)
 
 root.mainloop()

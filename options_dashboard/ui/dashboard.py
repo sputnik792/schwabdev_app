@@ -10,7 +10,7 @@ from state.ticker_state import TickerState
 from ui import dialogs
 from data.schwab_api import fetch_stock_price, fetch_option_chain
 from data.csv_loader import load_csv_index
-from data.schwab_auth import reset_schwab_tokens
+from data.schwab_auth import mark_schwab_reset
 from ui import dialogs
 
 class Dashboard(tk.Frame):
@@ -54,31 +54,27 @@ class Dashboard(tk.Frame):
         except Exception as e:
             dialogs.error("Error", f"Failed to save presets:\n{e}")
 
-    def reconnect_schwab(self):
+    def delete_tokens(self):
         confirm = dialogs.ask_yes_no(
-            "Reconnect Schwab",
-            "This will log you out of Schwab and require re-authentication.\n\nContinue?"
+            "Delete Schwab Tokens",
+            "This will delete all Schwab authentication tokens.\n\n"
+            "You will need to log in again.\n\n"
+            "Are you sure?"
         )
 
         if not confirm:
             return
 
-        deleted = reset_schwab_tokens()
+        mark_schwab_reset()
 
-        if deleted:
-            dialogs.info(
-                "Schwab Disconnected",
-                "Schwab tokens deleted.\n\nPlease restart the application to re-authenticate."
-            )
-        else:
-            dialogs.info(
-                "No Tokens Found",
-                "No Schwab tokens were found.\n\nPlease restart the application."
-            )
+        dialogs.info(
+            "Tokens Deleted",
+            "Schwab tokens will be deleted.\n\n"
+            "The application will now close.\n"
+            "Please restart to re-authenticate."
+        )
 
-        # Close the app cleanly
         self.master.destroy()
-
 
     # =========================
     # Layout
@@ -87,13 +83,15 @@ class Dashboard(tk.Frame):
     def build_layout(self):
         self.top_bar = tk.Frame(self)
         self.top_bar.pack(fill=tk.X, pady=4)
-
-        reconnect_btn = tk.Button(
-            self,
-            text="Reconnect Schwab",
-            command=self.reconnect_schwab
-        )
-        reconnect_btn.pack(anchor="ne", padx=10, pady=5)
+        
+        # delete_btn = tk.Button(
+        #     self,
+        #     text="Delete Tokens",
+        #     fg="white",
+        #     bg="#c0392b",
+        #     command=self.delete_tokens
+        # )
+        # delete_btn.pack(anchor="ne", padx=10, pady=5)
 
         ttk.Button(
             self.top_bar,
