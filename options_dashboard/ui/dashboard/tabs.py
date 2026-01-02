@@ -15,14 +15,14 @@ def rebuild_tabs(self):
 def create_stock_tab(self, symbol):
     fonts = get_fonts()
 
-    tab = ctk.CTkFrame(self.notebook, fg_color=BG_CONTENT)
+    tab = ctk.CTkFrame(self.notebook)
     self.notebook.add(tab, text=symbol)
 
     price_var = tk.StringVar(value="—")
     exp_var = tk.StringVar()
 
     # ---------- Header card ----------
-    card = ctk.CTkFrame(tab, fg_color=CARD_BG, corner_radius=16)
+    card = ctk.CTkFrame(tab, corner_radius=16)
     card.pack(fill="x", padx=16, pady=16)
 
     ctk.CTkLabel(card, text=symbol, font=fonts["lg"]).pack(anchor="w", padx=16, pady=(12, 0))
@@ -44,7 +44,7 @@ def create_stock_tab(self, symbol):
     exp_dropdown.bind("<<ComboboxSelected>>", lambda e, s=symbol: self.on_expiration_change(e, s))
 
     # ---------- Table ----------
-    table_wrap = ctk.CTkFrame(tab, fg_color=TABLE_BG, corner_radius=14)
+    table_wrap = ctk.CTkFrame(tab, corner_radius=14)
     table_wrap.pack(fill="both", expand=True, padx=16, pady=(0, 16))
 
     cols = [

@@ -37,7 +37,7 @@ def open_stats_breakdown(self):
         font=fonts["lg"]
     ).pack(pady=12)
 
-    card = ctk.CTkFrame(win, fg_color=CARD_BG, corner_radius=14)
+    card = ctk.CTkFrame(win, corner_radius=14)
     card.pack(fill="both", expand=True, padx=16, pady=16)
 
     ctk.CTkLabel(card, text="Put / Call Ratio", font=fonts["md"]).pack(pady=(20, 4))

@@ -18,6 +18,7 @@ from ui.dashboard.tabs import rebuild_tabs, create_stock_tab, update_table_for_s
 from ui.dashboard.data_controller import fetch_worker, fetch_all_stocks, load_csv_index_data
 from ui.dashboard.refresh import start_auto_refresh, auto_refresh_price, auto_refresh_options
 from ui.dashboard.charts_controller import generate_selected_chart, generate_chart_group
+from style.custom_theme_controller import register_theme_change_callback
 
 class Dashboard(ctk.CTkFrame):
     def __init__(self, root, client):
@@ -51,9 +52,14 @@ class Dashboard(ctk.CTkFrame):
         # ---- layout ----
         self.pack(fill="both", expand=True)
         self.build_layout()
+        register_theme_change_callback(self.rebuild)
         self.rebuild_tabs()
         self.start_auto_refresh()
+        # register_theme_change_callback(self.rebuild)
 
+    def rebuild(self):
+        self.destroy()
+        Dashboard(self.root, self.client)
 
     def load_preset_tickers(self):
         if os.path.exists(PRESET_FILE):

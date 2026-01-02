@@ -5,6 +5,7 @@ from style.theme import *
 from style.ttk_styles import apply_ttk_styles
 from style.theme_controller import set_theme_from_switch, is_light_mode, current_icon
 from style.tooltip import ToolTip
+from style.custom_theme_controller import list_available_themes, set_color_theme, get_current_theme
 
 def build_layout(self):
     fonts = get_fonts()
@@ -13,7 +14,7 @@ def build_layout(self):
     self.pack(fill="both", expand=True)
 
     # ---------- Top bar ----------
-    top = ctk.CTkFrame(self, height=56, fg_color=BG_APP)
+    top = ctk.CTkFrame(self, height=56)
     top.pack(fill="x", padx=12, pady=10)
 
     ctk.CTkLabel(
@@ -30,18 +31,18 @@ def build_layout(self):
     ).pack(side="left", padx=10)
 
     # ---------- Main ----------
-    main = ctk.CTkFrame(self, fg_color=BG_APP)
+    main = ctk.CTkFrame(self)
     main.pack(fill="both", expand=True, padx=12, pady=(0, 12))
 
     # ---------- Sidebar ----------
-    self.sidebar = ctk.CTkFrame(main, width=260, fg_color=BG_SIDEBAR)
+    self.sidebar = ctk.CTkFrame(main, width=260)
     self.sidebar.pack(side="left", fill="y", padx=(0, 12))
     self.sidebar.pack_propagate(False)
 
     build_sidebar(self)
 
     # ---------- Content ----------
-    self.content = ctk.CTkFrame(main, fg_color=BG_CONTENT, corner_radius=14)
+    self.content = ctk.CTkFrame(main, corner_radius=14)
     self.content.pack(side="left", fill="both", expand=True)
 
     apply_ttk_styles()
@@ -115,6 +116,37 @@ def build_sidebar(self):
     ).pack(fill="x", padx=10, pady=10)
 
     ctk.CTkFrame(self.sidebar, height=1).pack(fill="x", pady=14)
+    # ----------------------------------
+    # Color Theme Selector
+    # ----------------------------------
+
+    ctk.CTkLabel(
+        self.sidebar,
+        text="Color Theme",
+        font=fonts["md"]
+    ).pack(pady=(10, 5))
+
+    themes = list_available_themes()
+
+    self.color_theme_var = ctk.StringVar(
+        value=get_current_theme() or (themes[0] if themes else "")
+    )
+
+    def on_theme_change(theme_name: str):
+        if theme_name:
+            set_color_theme(theme_name)
+
+    theme_dropdown = ctk.CTkOptionMenu(
+        self.sidebar,
+        values=themes,
+        variable=self.color_theme_var,
+        command=on_theme_change,
+        width=160
+    )
+
+    theme_dropdown.pack(pady=(0, 12))
+
+    ctk.CTkFrame(self.sidebar, height=1).pack(fill="x", pady=14)
 
     # Icon label (dynamic)
     theme_icon = ctk.CTkLabel(
@@ -125,27 +157,34 @@ def build_sidebar(self):
     )
     theme_icon.pack(pady=(0, 6))
 
-    # Theme switch
+    # Theme switch (text will be set dynamically)
     theme_switch = ctk.CTkSwitch(
         self.sidebar,
-        text="Light Mode",
         font=fonts["md"]
     )
 
-    # Initial state
+    # Initial state + label
     if is_light_mode():
         theme_switch.select()
+        theme_switch.configure(text="Switch to\nDark Mode")
     else:
         theme_switch.deselect()
+        theme_switch.configure(text="Switch to\nLight Mode")
 
     def on_theme_toggle():
         is_light = bool(theme_switch.get())
         set_theme_from_switch(is_light)
+
+        # Update icon
         theme_icon.configure(text=current_icon())
+
+        # Update label text
+        theme_switch.configure(
+            text="Switch to\nDark Mode" if is_light else "Switch to\nLight Mode"
+        )
 
     theme_switch.configure(command=on_theme_toggle)
     theme_switch.pack(pady=(0, 18))
-
     # Tooltip
     ToolTip(theme_switch, "Toggle light / dark mode")
 

@@ -1,5 +1,4 @@
 *.pyc
-tokens.json
-preset_tickers.json
+*.json
 *.pem
 *.csv
