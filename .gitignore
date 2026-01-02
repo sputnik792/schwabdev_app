@@ -2,3 +2,4 @@
 tokens.json
 preset_tickers.json
 *.pem
+*.csv

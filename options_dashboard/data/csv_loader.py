@@ -3,6 +3,7 @@ import numpy as np
 import json
 import os
 import datetime
+from utils.expiration import normalize_expiration
 
 def load_csv_index(
     symbol,
@@ -28,7 +29,13 @@ def load_csv_index(
         spot_price = 0.0
 
     # Parse options table
-    df = pd.read_csv(filename, sep=",", header=None, skiprows=4)
+    df = pd.read_csv(
+        filename,
+        sep=",",
+        header=None,
+        comment="#",
+        skip_blank_lines=True
+    )
 
     df.columns = [
         "ExpirationDate",
@@ -54,7 +61,7 @@ def load_csv_index(
         if pd.isna(exp_date):
             continue
 
-        exp_key = exp_date.strftime("%Y-%m-%d") + ":0"
+        exp_key = normalize_expiration(exp_date)
         expirations.append(exp_key)
 
         clean_df = pd.DataFrame({
