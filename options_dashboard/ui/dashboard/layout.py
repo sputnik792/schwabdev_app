@@ -2,9 +2,9 @@ import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk
 from style.theme import *
-from style.theme import get_fonts
 from style.ttk_styles import apply_ttk_styles
-from style.theme_controller import toggle_theme
+from style.theme_controller import set_theme_from_switch, is_light_mode, current_icon
+from style.tooltip import ToolTip
 
 def build_layout(self):
     fonts = get_fonts()
@@ -114,14 +114,40 @@ def build_sidebar(self):
         command=self.load_csv_index_data
     ).pack(fill="x", padx=10, pady=10)
 
-    ctk.CTkFrame(self.sidebar, height=1).pack(fill="x", pady=10)
+    ctk.CTkFrame(self.sidebar, height=1).pack(fill="x", pady=14)
 
-    ctk.CTkButton(
+    # Icon label (dynamic)
+    theme_icon = ctk.CTkLabel(
         self.sidebar,
-        text="Toggle Theme",
-        font=fonts["md"],
-        command=toggle_theme
-    ).pack(fill="x", padx=16, pady=(0, 16))
+        text=current_icon(),
+        font=fonts["lg"],
+        text_color=TEXT_SECONDARY
+    )
+    theme_icon.pack(pady=(0, 6))
+
+    # Theme switch
+    theme_switch = ctk.CTkSwitch(
+        self.sidebar,
+        text="Light Mode",
+        font=fonts["md"]
+    )
+
+    # Initial state
+    if is_light_mode():
+        theme_switch.select()
+    else:
+        theme_switch.deselect()
+
+    def on_theme_toggle():
+        is_light = bool(theme_switch.get())
+        set_theme_from_switch(is_light)
+        theme_icon.configure(text=current_icon())
+
+    theme_switch.configure(command=on_theme_toggle)
+    theme_switch.pack(pady=(0, 18))
+
+    # Tooltip
+    ToolTip(theme_switch, "Toggle light / dark mode")
 
 def build_tabs(self):
     apply_ttk_styles()
