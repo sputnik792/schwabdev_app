@@ -1,14 +1,12 @@
 import customtkinter as ctk
 from ui.auth_menu import AuthMenu
-from ui.dashboard import Dashboard
+from ui.dashboard.dashboard import Dashboard
 
 from data.schwab_auth import (
     perform_pending_reset,
     schwab_tokens_exist,
     create_authenticated_client
 )
-from ui.auth_menu import AuthMenu
-from ui.dashboard import Dashboard
 
 ctk.set_appearance_mode("dark")          # "dark", "light", or "system"
 ctk.set_default_color_theme("dark-blue") # modern, clean accent

@@ -1,0 +1,107 @@
+import threading
+import datetime
+
+from state.ticker_state import TickerState
+from data.schwab_api import fetch_stock_price, fetch_option_chain
+from data.csv_loader import load_csv_index
+from ui import dialogs
+
+def fetch_worker(self, symbol):
+    try:
+        price = fetch_stock_price(self.client, symbol)
+        exp_map, expirations = fetch_option_chain(self.client, symbol)
+
+        state = TickerState(
+            symbol=symbol,
+            price=price,
+            exp_data_map=exp_map,
+            last_updated=datetime.datetime.now()
+        )
+
+        def update_ui():
+            self.ticker_data[symbol] = state
+            ui = self.ticker_tabs.get(symbol)
+            if not ui:
+                return
+
+            ui["price_var"].set(f"${price:.2f}" if price else "—")
+
+            if expirations:
+                ui["exp_dropdown"]["values"] = expirations
+                ui["exp_var"].set(expirations[0])
+                self.update_table_for_symbol(symbol, expirations[0])
+
+        self.root.after(0, update_ui)
+
+    except RuntimeError as e:
+        if str(e) == "AUTH_REQUIRED":
+            self.root.after(
+                0,
+                lambda: dialogs.error(
+                    "Authentication Required",
+                    "Schwab authentication expired.\nPlease reconnect."
+                )
+            )
+    except Exception as e:
+        self.root.after(
+            0,
+            lambda: dialogs.error("Error", f"{symbol}: {e}")
+        )
+
+def fetch_all_stocks(self):
+    for symbol in self.preset_tickers:
+        threading.Thread(
+            target=fetch_worker,
+            args=(self, symbol),
+            daemon=True
+        ).start()
+
+def load_csv_index_data(self):
+    symbol = self.csv_symbol_var.get()
+
+    if self.csv_mode_var.get() == "Default File":
+        filename = f"{symbol.lower()}_quotedata.csv"
+    else:
+        from tkinter import filedialog
+        filename = filedialog.askopenfilename(
+            title=f"Select {symbol} CSV File",
+            filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")]
+        )
+        if not filename:
+            return
+
+    try:
+        exp_map, expirations, spot, display_symbol = load_csv_index(
+            symbol,
+            filename
+        )
+
+        state = TickerState(
+            symbol=display_symbol,
+            price=spot,
+            exp_data_map=exp_map,
+            last_updated=datetime.datetime.now(),
+            is_csv=True
+        )
+
+        self.ticker_data[display_symbol] = state
+
+        if display_symbol not in self.ticker_tabs:
+            self.preset_tickers.append(display_symbol)
+            self.create_stock_tab(display_symbol)
+
+        ui = self.ticker_tabs[display_symbol]
+        ui["price_var"].set(f"${spot:.2f}")
+
+        ui["exp_dropdown"]["values"] = expirations
+        if expirations:
+            ui["exp_var"].set(expirations[0])
+            self.update_table_for_symbol(display_symbol, expirations[0])
+
+        dialogs.info(
+            "CSV Loaded",
+            f"{display_symbol} options loaded successfully."
+        )
+
+    except Exception as e:
+        dialogs.error("CSV Error", str(e))

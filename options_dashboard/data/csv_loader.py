@@ -3,7 +3,7 @@ import numpy as np
 import json
 import os
 import datetime
-from utils.expiration import normalize_expiration
+from options_dashboard.utils.expiration import normalize_expiration
 
 def load_csv_index(
     symbol,
