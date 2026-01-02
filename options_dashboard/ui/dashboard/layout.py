@@ -1,45 +1,55 @@
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk
+from style.theme import *
+from style.theme import get_fonts
+from style.ttk_styles import apply_ttk_styles
+from style.theme_controller import toggle_theme
 
 def build_layout(self):
-    # ---------- Top Bar ----------
-    self.top_bar = ctk.CTkFrame(self, height=48)
-    self.top_bar.pack(side="top", fill="x", padx=10, pady=(10, 5))
+    fonts = get_fonts()
+
+    # Root container
+    self.pack(fill="both", expand=True)
+
+    # ---------- Top bar ----------
+    top = ctk.CTkFrame(self, height=56, fg_color=BG_APP)
+    top.pack(fill="x", padx=12, pady=10)
+
+    ctk.CTkLabel(
+        top,
+        text="Options Dashboard",
+        font=fonts["lg"]
+    ).pack(side="left", padx=12)
 
     ctk.CTkButton(
-        self.top_bar,
+        top,
         text="Fetch All",
         width=120,
         command=self.fetch_all_stocks
-    ).pack(side="left", padx=5)
+    ).pack(side="left", padx=10)
 
-    ctk.CTkButton(
-        self.top_bar,
-        text="Edit Preset Tickers",
-        width=180,
-        command=self.edit_tickers
-    ).pack(side="left", padx=5)
-
-    # ---------- Main Area ----------
-    self.main = ctk.CTkFrame(self)
-    self.main.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+    # ---------- Main ----------
+    main = ctk.CTkFrame(self, fg_color=BG_APP)
+    main.pack(fill="both", expand=True, padx=12, pady=(0, 12))
 
     # ---------- Sidebar ----------
-    self.sidebar = ctk.CTkFrame(self.main, width=220)
-    self.sidebar.pack(side="left", fill="y", padx=(0, 10), pady=5)
+    self.sidebar = ctk.CTkFrame(main, width=260, fg_color=BG_SIDEBAR)
+    self.sidebar.pack(side="left", fill="y", padx=(0, 12))
     self.sidebar.pack_propagate(False)
 
     build_sidebar(self)
 
     # ---------- Content ----------
-    self.content = ctk.CTkFrame(self.main)
-    self.content.pack(side="left", fill="both", expand=True, pady=5)
+    self.content = ctk.CTkFrame(main, fg_color=BG_CONTENT, corner_radius=14)
+    self.content.pack(side="left", fill="both", expand=True)
 
+    apply_ttk_styles()
     build_tabs(self)
 
-
 def build_sidebar(self):
+    fonts = get_fonts()
+
     ctk.CTkLabel(
         self.sidebar,
         text="Controls",
@@ -104,10 +114,17 @@ def build_sidebar(self):
         command=self.load_csv_index_data
     ).pack(fill="x", padx=10, pady=10)
 
+    ctk.CTkFrame(self.sidebar, height=1).pack(fill="x", pady=10)
+
+    ctk.CTkButton(
+        self.sidebar,
+        text="Toggle Theme",
+        font=fonts["md"],
+        command=toggle_theme
+    ).pack(fill="x", padx=16, pady=(0, 16))
 
 def build_tabs(self):
-    style = ttk.Style()
-    style.theme_use("default")
+    apply_ttk_styles()
 
     self.notebook = ttk.Notebook(self.content)
     self.notebook.pack(fill="both", expand=True)

@@ -92,7 +92,6 @@ def compute_bar_width(strikes):
     else:
         return spacing * 0.25
 
-
 def compute_xticks(strikes):
     strikes = sorted(strikes)
     if len(strikes) < 2:
@@ -110,10 +109,9 @@ def compute_xticks(strikes):
         interval = spacing * 2
 
     start = int(strikes[0] // interval) * interval
-    end   = int((strikes[-1] + interval) // interval) * interval
+    end = int((strikes[-1] + interval) // interval) * interval
 
     return list(range(start, end + interval, interval))
-
 
 def embed_matplotlib_chart(
     parent,

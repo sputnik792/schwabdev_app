@@ -1,8 +1,6 @@
 import customtkinter as ctk
 import tkinter as tk
-
 from ui import dialogs
-
 
 def generate_selected_chart(self, spot_override=None):
     tab_id = self.notebook.select()
@@ -47,8 +45,8 @@ def generate_selected_chart(self, spot_override=None):
             continue
 
         for opt in ("CALL", "PUT"):
-            iv = float(row.get(f"IV_{opt}", 0) or 0)
-            oi = float(row.get(f"OI_{opt}", 0) or 0)
+            iv = float(row.get(f"IV_{opt}", 0) or 0.2)
+            oi = float(row.get(f"OI_{opt}", 0) or 1)
             if iv <= 0 or oi <= 0:
                 continue
 
@@ -76,6 +74,14 @@ def generate_selected_chart(self, spot_override=None):
                 "Type": opt,
                 "Exposure": sign * exp_val
             })
+
+    if not rows:
+        dialogs.warning(
+            "No Exposure Data",
+            "No valid options found for this expiration.\n"
+            "IV or Open Interest may be missing."
+        )
+        return
 
     df_plot = build_exposure_dataframe(rows)
     total = df_plot["Exposure"].sum() / 1e9
