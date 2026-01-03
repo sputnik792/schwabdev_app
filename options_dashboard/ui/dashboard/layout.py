@@ -6,6 +6,7 @@ from style.ttk_styles import apply_ttk_styles
 from style.theme_controller import set_theme_from_switch, is_light_mode, current_icon
 from style.tooltip import ToolTip
 from style.custom_theme_controller import list_available_themes, set_color_theme, get_current_theme
+from state.app_state import get_state_value, set_state_value
 
 def build_layout(self):
     fonts = get_fonts()
@@ -81,13 +82,20 @@ def build_sidebar(self):
     ).pack(fill="x", padx=10, pady=6)
 
     # Exposure model
-    self.model_var = tk.StringVar(value="Gamma")
+    default_model = get_state_value("exposure_model", "Gamma")
+    self.model_var = tk.StringVar(value=default_model)
+    
+    def on_model_change(value):
+        set_state_value("exposure_model", value)
+    
     ctk.CTkLabel(self.sidebar, text="Exposure Model").pack(pady=(0, 5))
-    ctk.CTkSegmentedButton(
+    model_button = ctk.CTkSegmentedButton(
         self.sidebar,
         values=["Gamma", "Vanna", "Volga", "Charm"],
-        variable=self.model_var
-    ).pack(pady=(0, 15))
+        variable=self.model_var,
+        command=on_model_change
+    )
+    model_button.pack(pady=(0, 15))
 
     ctk.CTkButton(
         self.sidebar,
@@ -141,13 +149,17 @@ def build_sidebar(self):
 
     themes = list_available_themes()
 
-    self.color_theme_var = ctk.StringVar(
-        value=get_current_theme() or (themes[0] if themes else "")
-    )
+    # Load theme from state or current theme, default to first available
+    saved_theme = get_state_value("color_theme")
+    current_theme = get_current_theme() or saved_theme
+    theme_value = current_theme or (themes[0] if themes else "")
+    
+    self.color_theme_var = ctk.StringVar(value=theme_value)
 
     def on_theme_change(theme_name: str):
         if theme_name:
             set_color_theme(theme_name)
+            set_state_value("color_theme", theme_name)
 
     theme_dropdown = ctk.CTkOptionMenu(
         self.sidebar,
