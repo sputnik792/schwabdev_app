@@ -125,19 +125,6 @@ def build_sidebar(self):
     )
     model_button.pack(pady=(0, 15))
 
-    ctk.CTkButton(
-        self.sidebar,
-        text="Generate Chart",
-        command=self.generate_selected_chart
-    ).pack(fill="x", padx=10, pady=5)
-
-    ctk.CTkButton(
-        self.sidebar,
-        text="Generate Chart Group",
-        command=self.generate_chart_group
-    ).pack(fill="x", padx=10, pady=(0, 10))
-
-
     ctk.CTkFrame(self.sidebar, height=1).pack(fill="x", pady=5)
     # ----------------------------------
     # Color Theme Selector
@@ -258,6 +245,13 @@ def show_multi_view(self):
             command=self.edit_tickers
         ).pack(side="left", padx=10)
         
+        ctk.CTkButton(
+            button_bar,
+            text="Generate Chart Group",
+            width=150,
+            command=self.generate_chart_group
+        ).pack(side="left", padx=10)
+        
         # ---------- Content (tabs) ----------
         self.content = ctk.CTkFrame(self.multi_view, corner_radius=14)
         self.content.pack(fill="both", expand=True, padx=16, pady=(0, 16))
@@ -338,6 +332,17 @@ def show_single_view(self):
             height=36
         )
         exp_dropdown.pack(side="left", padx=8)
+        
+        # Generate Chart button below expiration dropdown
+        chart_button_row = ctk.CTkFrame(card, fg_color="transparent")
+        chart_button_row.pack(anchor="w", padx=16, pady=(0, 12))
+        
+        ctk.CTkButton(
+            chart_button_row,
+            text="Generate Chart",
+            command=self.generate_selected_chart,
+            width=150
+        ).pack(side="left")
         
         # CSV controls (right side)
         csv_panel = ctk.CTkFrame(header_row, corner_radius=16)
