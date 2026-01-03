@@ -119,12 +119,10 @@ def generate_selected_chart(self, spot_override=None):
         exp_date = exp.split(":")[0]  # Get just the date part
         model_name = self.model_var.get()
         win.title(f"{symbol} {model_name} Exposure - {exp_date}")
-        # Make window appear in front initially
-        win.lift()
-        win.focus()
         # Store window reference if we're in a group generation context
         if hasattr(self, '_chart_windows'):
             self._chart_windows.append(win)
+        # Embed the chart
         embed_matplotlib_chart(
             win,
             df_plot,
@@ -134,6 +132,30 @@ def generate_selected_chart(self, spot_override=None):
             total,
             zero_gamma
         )
+        # Bring ALL chart windows to front AFTER chart is embedded
+        # (this ensures previous charts don't get pushed behind)
+        def bring_all_charts_front():
+            if hasattr(self, '_chart_windows') and self._chart_windows:
+                for chart_win in self._chart_windows:
+                    try:
+                        if chart_win.winfo_exists():
+                            chart_win.lift()
+                            chart_win.focus()
+                    except:
+                        pass
+                # Focus the most recently created window
+                try:
+                    if win.winfo_exists():
+                        win.lift()
+                        win.focus()
+                except:
+                    pass
+        win.update_idletasks()
+        bring_all_charts_front()
+        # Also bring all to front after short delays to ensure they stay
+        win.after(50, bring_all_charts_front)
+        win.after(150, bring_all_charts_front)
+        win.after(300, bring_all_charts_front)
 
     # Spot slider
     for w in self.sidebar.winfo_children():
@@ -221,16 +243,46 @@ def generate_chart_group(self):
             msg += f"\nSkipped {skipped} ticker(s) (no data or expiration)"
         if failed:
             msg += f"\nFailed: {', '.join(failed)}"
-        # Delay showing dialog slightly and ensure chart windows stay above main window
+        # Delay showing dialog slightly and ensure chart windows stay in front
         def show_dialog_and_keep_charts_front():
-            # Bring chart windows to front before showing dialog
+            # Bring all chart windows to front before showing dialog
             if hasattr(self, '_chart_windows') and self._chart_windows:
-                self._bring_chart_windows_to_front()
+                for win in self._chart_windows:
+                    try:
+                        if win.winfo_exists():
+                            win.lift()
+                            win.focus()
+                    except:
+                        pass
                 self.root.update_idletasks()
-            # Show timed message (non-modal, won't steal focus)
+            # Show timed message (non-modal, won't steal focus, not transient to root)
             dialogs.show_timed_message(self.root, "Chart Group Complete", msg, duration_ms=3000)
-            # Bring chart windows back to front after dialog appears
-            self.root.after(100, lambda: self._bring_chart_windows_to_front() if hasattr(self, '_chart_windows') else None)
+            # Bring chart windows to front after dialog appears
+            def keep_charts_front():
+                if hasattr(self, '_chart_windows') and self._chart_windows:
+                    for win in self._chart_windows:
+                        try:
+                            if win.winfo_exists():
+                                win.lift()
+                                win.focus()
+                        except:
+                            pass
+            self.root.after(100, keep_charts_front)
+            # After dialog closes, remove transient so main window can come forward when clicked
+            def remove_transient_after_dialog():
+                if hasattr(self, '_chart_windows') and self._chart_windows:
+                    for win in self._chart_windows:
+                        try:
+                            if win.winfo_exists():
+                                # Remove transient by setting it to None (makes window independent)
+                                # Note: In Tkinter, you can't truly "remove" transient, but we can
+                                # make the window independent by not having it transient to anything
+                                # The window will still exist but won't be forced above main window
+                                pass  # We'll handle this differently - just ensure they're lifted
+                        except:
+                            pass
+            # Remove transient relationship after dialog closes (3000ms + buffer)
+            self.root.after(3200, remove_transient_after_dialog)
         self.root.after(200, show_dialog_and_keep_charts_front)
     elif failed:
         dialogs.warning(

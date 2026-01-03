@@ -45,7 +45,8 @@ def show_timed_message(root, title, message, duration_ms=3000):
 
     dialog.after(duration_ms, dialog.destroy)
 
-    dialog.transient(root)
+    # Don't make transient to root to avoid bringing main window forward
+    # dialog.transient(root)  # Commented out to prevent affecting other windows
     # Don't grab focus - this allows other windows to stay in front
     # dialog.grab_set()  # Commented out to prevent stealing focus
 

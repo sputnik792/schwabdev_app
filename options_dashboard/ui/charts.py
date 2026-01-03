@@ -177,4 +177,8 @@ def embed_matplotlib_chart(
     toolbar = NavigationToolbar2Tk(canvas, parent)
     toolbar.update()
     canvas.get_tk_widget().pack(fill="both", expand=True)
+    # Bring parent window to front after embedding (embedding can cause focus loss)
+    parent.update_idletasks()
+    parent.lift()
+    parent.focus()
     return fig
