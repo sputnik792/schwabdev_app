@@ -270,6 +270,11 @@ def show_multi_view(self):
     # Hide single view if it exists
     if self.single_view:
         self.single_view.pack_forget()
+        # Clean up single view ticker from ticker_tabs if it exists
+        if hasattr(self, 'single_view_symbol') and self.single_view_symbol in self.ticker_tabs:
+            # Don't delete the data, just remove the UI reference
+            # The data will be reused if the ticker is in preset_tickers
+            pass
     
     # Create multi view if it doesn't exist
     if not self.multi_view:
@@ -299,17 +304,110 @@ def show_single_view(self):
     if not self.single_view:
         self.single_view = ctk.CTkFrame(self.content_area, corner_radius=14)
         
-        # Placeholder content
-        placeholder = ctk.CTkLabel(
-            self.single_view,
-            text="Single Ticker View\n(Placeholder)",
-            font=ctk.CTkFont(size=24, weight="bold"),
-            justify="center"
+        # Apply styles for ttk widgets
+        apply_ttk_styles()
+        
+        # Create single ticker panel (similar to create_stock_tab but without notebook)
+        from ui.dashboard.tabs import create_stock_tab
+        from style.theme import get_fonts
+        
+        fonts = get_fonts()
+        
+        # Use a default symbol or the first preset ticker
+        single_symbol = self.preset_tickers[0] if self.preset_tickers else "SPY"
+        
+        # Create the tab structure directly in single_view (no notebook wrapper)
+        tab = ctk.CTkFrame(self.single_view)
+        tab.pack(fill="both", expand=True, padx=16, pady=16)
+        
+        price_var = tk.StringVar(value="—")
+        exp_var = tk.StringVar()
+        
+        # ---------- Header card ----------
+        card = ctk.CTkFrame(tab, corner_radius=16)
+        card.pack(fill="x", padx=16, pady=16)
+        
+        ctk.CTkLabel(card, text=single_symbol, font=fonts["lg"]).pack(anchor="w", padx=16, pady=(12, 0))
+        
+        ctk.CTkLabel(
+            card,
+            textvariable=price_var,
+            font=fonts["xxl"],
+            text_color=ACCENT_PRIMARY
+        ).pack(anchor="w", padx=16)
+        
+        row = ctk.CTkFrame(card, fg_color="transparent")
+        row.pack(anchor="w", padx=16, pady=(6, 12))
+        
+        ctk.CTkLabel(row, text="Expiration:", font=fonts["md"], text_color=TEXT_MUTED).pack(side="left")
+        
+        def on_expiration_selected(selected_value):
+            exp_var.set(selected_value)
+            self.on_expiration_change(None, single_symbol)
+        
+        exp_dropdown = ctk.CTkOptionMenu(
+            row,
+            variable=exp_var,
+            values=[],  # Will be populated when data is loaded
+            command=on_expiration_selected,
+            width=300,
+            font=ctk.CTkFont(size=14),
+            dropdown_font=ctk.CTkFont(size=16),
+            height=36
         )
-        placeholder.pack(expand=True, fill="both")
+        exp_dropdown.pack(side="left", padx=8)
+        
+        # ---------- Table ----------
+        table_wrap = ctk.CTkFrame(tab, corner_radius=14)
+        table_wrap.pack(fill="both", expand=True, padx=16, pady=(0, 16))
+        
+        cols = [
+            "Bid_Call","Ask_Call","Delta_Call","Theta_Call","Gamma_Call","IV_Call","OI_Call",
+            "Strike",
+            "Bid_Put","Ask_Put","Delta_Put","Theta_Put","Gamma_Put","IV_Put","OI_Put"
+        ]
+        headers = [
+            "Call Bid","Call Ask","Δ(Call)","Θ(Call)","Γ(Call)","IV(Call)","OI(Call)",
+            "Strike",
+            "Put Bid","Put Ask","Δ(Put)","Θ(Put)","Γ(Put)","IV(Put)","OI(Put)"
+        ]
+        
+        tree = ttk.Treeview(table_wrap, columns=cols, show="headings")
+        
+        for c, h in zip(cols, headers):
+            tree.heading(c, text=h)
+            tree.column(c, width=110, anchor="center")
+        vsb = ttk.Scrollbar(table_wrap, orient="vertical", command=tree.yview)
+        hsb = ttk.Scrollbar(table_wrap, orient="horizontal", command=tree.xview)
+        
+        tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        
+        vsb.pack(side="right", fill="y")
+        hsb.pack(side="bottom", fill="x")
+        tree.pack(fill="both", expand=True)
+        
+        # Store in ticker_tabs dict so it works with existing update mechanisms
+        self.ticker_tabs[single_symbol] = {
+            "tab": tab,
+            "price_var": price_var,
+            "exp_var": exp_var,
+            "exp_dropdown": exp_dropdown,
+            "tree": tree,
+            "cols": cols
+        }
+        
+        # Store reference to single view symbol
+        self.single_view_symbol = single_symbol
     
     # Show single view
     self.single_view.pack(fill="both", expand=True)
+    
+    # Update table if data exists
+    if hasattr(self, 'single_view_symbol') and self.single_view_symbol in self.ticker_tabs:
+        ui = self.ticker_tabs[self.single_view_symbol]
+        exp = ui["exp_var"].get()
+        if exp:
+            self.update_table_for_symbol(self.single_view_symbol, exp)
 
 def toggle_view_mode(self):
     """Toggle between single and multi view - called by switch"""
