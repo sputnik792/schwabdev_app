@@ -157,12 +157,13 @@ def generate_selected_chart(self, spot_override=None):
         win.after(150, bring_all_charts_front)
         win.after(300, bring_all_charts_front)
 
-    # Spot slider
-    for w in self.sidebar.winfo_children():
-        if isinstance(w, (tk.Scale, ctk.CTkSlider)):
-            w.destroy()
-
-    spot_slider(self.sidebar, spot, self.generate_selected_chart)
+    # Spot slider - only create if not in group generation mode
+    # (during group generation, we don't want sliders triggering chart regeneration)
+    if not hasattr(self, '_generating_chart_group') or not self._generating_chart_group:
+        for w in self.sidebar.winfo_children():
+            if isinstance(w, (tk.Scale, ctk.CTkSlider)):
+                w.destroy()
+        spot_slider(self.sidebar, spot, self.generate_selected_chart)
 
 
 def generate_chart_group(self):
@@ -171,15 +172,26 @@ def generate_chart_group(self):
     failed = []
     # Track chart windows so we can bring them to front after dialog
     self._chart_windows = []
+    # Track which ticker/expiration pairs have been generated to prevent duplicates
+    generated_pairs = set()
+    # Set flag to prevent spot slider from triggering chart regeneration during group generation
+    self._generating_chart_group = True
     
     for symbol, ui in self.ticker_tabs.items():
         if symbol not in self.ticker_data:
             skipped += 1
             continue
         
-        # Check if expiration is selected
+        # Get the expiration date selected in this ticker's UI
         exp = ui["exp_var"].get()
         if not exp:
+            skipped += 1
+            continue
+        
+        # Create a unique key for this ticker/expiration pair
+        pair_key = (symbol, exp)
+        if pair_key in generated_pairs:
+            # Skip if we've already generated this pair
             skipped += 1
             continue
         
@@ -190,8 +202,10 @@ def generate_chart_group(self):
             continue
         
         # Try to generate chart
-        self.notebook.select(ui["tab"])
         try:
+            # Select the tab for this ticker
+            self.notebook.select(ui["tab"])
+            
             # Validate data using the same logic as generate_selected_chart
             spot = state.price
             if spot <= 0:
@@ -227,6 +241,9 @@ def generate_chart_group(self):
                     continue
             
             if has_valid_data:
+                # Mark this pair as generated BEFORE calling generate_selected_chart
+                # to prevent infinite loops if the function triggers itself
+                generated_pairs.add(pair_key)
                 # Generate the chart
                 generate_selected_chart(self)
                 successful += 1
@@ -304,6 +321,9 @@ def generate_chart_group(self):
     # Clean up tracking
     if hasattr(self, '_chart_windows'):
         delattr(self, '_chart_windows')
+    # Clear the group generation flag
+    if hasattr(self, '_generating_chart_group'):
+        self._generating_chart_group = False
 
 def _bring_chart_windows_to_front(self):
     """Bring all chart windows to the front"""

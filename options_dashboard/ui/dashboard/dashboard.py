@@ -141,7 +141,7 @@ class Dashboard(ctk.CTkFrame):
             left_count = 12
             right_count = initial_count - 12
             rows_needed = max(left_count, right_count)
-        base_height = 120 + (rows_needed * 45)  # Header + entries + buttons
+        base_height = 180 + (rows_needed * 45)  # Header + entries + buttons (increased from 120 to 180 to show save button)
         win.geometry(f"500x{base_height}")
 
         # Main container
@@ -211,7 +211,7 @@ class Dashboard(ctk.CTkFrame):
                     right_count = num_entries - 12
                     rows_needed = max(left_count, right_count)
                 
-                new_height = 120 + (rows_needed * 45)
+                new_height = 180 + (rows_needed * 45)  # Increased from 120 to 180 to show save button
                 win.geometry(f"500x{new_height}")
 
         def add_ticker():
