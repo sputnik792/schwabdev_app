@@ -377,6 +377,86 @@ def show_single_view(self):
         )
         ticker_entry.pack(pady=5, padx=16)
         
+        # Container for autocomplete suggestions (will be shown/hidden dynamically)
+        autocomplete_container = ctk.CTkFrame(ticker_panel, fg_color="transparent")
+        # Don't pack initially - will be packed when suggestions appear
+        
+        # Initialize autocomplete feature
+        from ml_features.ticker_autocomplete import TickerAutocomplete
+        
+        def on_ticker_selected(ticker):
+            # When a ticker is selected, hide suggestions
+            autocomplete_container.pack_forget()
+        
+        autocomplete = TickerAutocomplete(
+            ticker_panel,  # Parent for positioning
+            ticker_entry,
+            max_suggestions=5,
+            on_selection=on_ticker_selected
+        )
+        
+        # Store autocomplete reference
+        self.single_view_autocomplete = autocomplete
+        self.single_view_autocomplete_container = autocomplete_container
+        
+        # Override the _show_suggestions to position in container instead of absolute place()
+        original_show = autocomplete._show_suggestions
+        def custom_show_suggestions(matches):
+            if not matches:
+                autocomplete_container.pack_forget()
+                if autocomplete.suggestion_frame:
+                    autocomplete.suggestion_frame.destroy()
+                    autocomplete.suggestion_frame = None
+                return
+            
+            # Show container between entry and button (before fetch button)
+            if hasattr(self, 'single_view_fetch_button'):
+                autocomplete_container.pack(pady=(0, 5), padx=16, fill="x", before=self.single_view_fetch_button)
+            else:
+                autocomplete_container.pack(pady=(0, 5), padx=16, fill="x")
+            
+            # Clear existing suggestions in container
+            for widget in autocomplete_container.winfo_children():
+                widget.destroy()
+            
+            # Create suggestion buttons in container
+            for ticker in matches[:5]:  # Limit to 5
+                btn = ctk.CTkButton(
+                    autocomplete_container,
+                    text=ticker,
+                    command=lambda t=ticker: autocomplete._select_ticker(t),
+                    width=150,
+                    height=28,
+                    font=ctk.CTkFont(size=12),
+                    fg_color=("gray75", "gray25"),
+                    hover_color=("gray65", "gray35")
+                )
+                btn.pack(pady=2, fill="x")
+            
+            autocomplete.is_visible = True
+        
+        autocomplete._show_suggestions = custom_show_suggestions
+        
+        # Override _hide_suggestions to also hide container
+        original_hide = autocomplete._hide_suggestions
+        def custom_hide_suggestions(event=None):
+            original_hide()
+            autocomplete_container.pack_forget()
+        
+        autocomplete._hide_suggestions = custom_hide_suggestions
+        
+        # Also hide on key release if entry is empty
+        original_on_key_release = autocomplete._on_key_release
+        def on_key_release(event):
+            value = ticker_var.get().strip()
+            if not value:
+                autocomplete_container.pack_forget()
+            # Call original handler
+            original_on_key_release(event)
+        
+        ticker_entry.unbind("<KeyRelease>")
+        ticker_entry.bind("<KeyRelease>", on_key_release)
+        
         def fetch_single_ticker_data():
             symbol = ticker_var.get().strip().upper()
             if not symbol:
@@ -392,12 +472,16 @@ def show_single_view(self):
             from ui.dashboard.data_controller import fetch_single_symbol_for_view
             fetch_single_symbol_for_view(self, symbol, ticker_var, price_var, exp_var, exp_dropdown, ticker_label)
         
-        ctk.CTkButton(
+        fetch_button = ctk.CTkButton(
             ticker_panel,
             text="Fetch Options Data",
             command=fetch_single_ticker_data,
             width=150
-        ).pack(pady=(5, 16), padx=16)
+        )
+        fetch_button.pack(pady=(5, 16), padx=16)
+        
+        # Store button reference for positioning autocomplete before it
+        self.single_view_fetch_button = fetch_button
         
         # CSV controls (right side)
         csv_panel = ctk.CTkFrame(header_row, corner_radius=16)

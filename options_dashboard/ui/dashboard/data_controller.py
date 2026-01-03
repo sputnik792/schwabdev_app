@@ -234,6 +234,12 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                     if hasattr(dashboard, 'single_view_ticker_label'):
                         dashboard.single_view_ticker_label.configure(text=symbol)
                     
+                    # Hide autocomplete suggestions after successful fetch
+                    if hasattr(dashboard, 'single_view_autocomplete'):
+                        dashboard.single_view_autocomplete._hide_suggestions()
+                    if hasattr(dashboard, 'single_view_autocomplete_container'):
+                        dashboard.single_view_autocomplete_container.pack_forget()
+                    
                     # Enable Generate Chart button if it exists
                     if hasattr(dashboard, 'generate_chart_button'):
                         dashboard.generate_chart_button.configure(state="normal")
@@ -377,6 +383,13 @@ def load_csv_index_data(self):
                 self.single_view_ticker_display_var.set(display_symbol)
             if hasattr(self, 'single_view_ticker_label'):
                 self.single_view_ticker_label.configure(text=display_symbol)
+            
+            # Hide autocomplete suggestions after successful CSV load
+            if hasattr(self, 'single_view_autocomplete'):
+                self.single_view_autocomplete._hide_suggestions()
+            if hasattr(self, 'single_view_autocomplete_container'):
+                self.single_view_autocomplete_container.pack_forget()
+            
             # Enable Generate Chart button if it exists
             if hasattr(self, 'generate_chart_button'):
                 self.generate_chart_button.configure(state="normal")
