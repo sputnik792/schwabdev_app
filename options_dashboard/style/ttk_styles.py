@@ -67,3 +67,54 @@ def apply_ttk_styles():
         "Treeview.Heading",
         font=("Segoe UI", 13, "bold")
     )
+    
+    # Configure Combobox styling for expiration dropdowns
+    # Lighter grayish background for the field
+    if light_mode:
+        combobox_bg = "#f3f4f6"  # Lighter gray
+        combobox_fg = "#1f2937"  # Dark text
+    else:
+        combobox_bg = "#4b5563"  # Lighter dark gray
+        combobox_fg = TEXT_PRIMARY
+    
+    style.configure(
+        "TCombobox",
+        font=("Segoe UI", 13),  # Slightly bigger font for field
+        fieldbackground=combobox_bg,
+        background=combobox_bg,
+        foreground=combobox_fg,
+        borderwidth=1,
+        relief="solid",
+        padding=6  # More padding for bigger appearance
+    )
+    
+    # Style the Listbox used in dropdown - this affects the actual dropdown options
+    style.configure(
+        "TListbox",
+        font=("Segoe UI", 16),  # Bigger font in dropdown options
+        background=combobox_bg,
+        foreground=combobox_fg,
+        selectbackground=ACCENT_PRIMARY,
+        selectforeground="#ffffff",
+        borderwidth=1,
+        relief="solid"
+    )
+    
+    # Also try styling the Combobox dropdown listbox specifically
+    style.configure(
+        "TCombobox.Listbox",
+        font=("Segoe UI", 16),  # Bigger font in dropdown options
+        background=combobox_bg,
+        foreground=combobox_fg,
+        selectbackground=ACCENT_PRIMARY,
+        selectforeground="#ffffff",
+        borderwidth=1
+    )
+    
+    # Style the dropdown list
+    style.map(
+        "TCombobox",
+        fieldbackground=[("readonly", combobox_bg)],
+        selectbackground=[("readonly", ACCENT_PRIMARY)],
+        selectforeground=[("readonly", "#ffffff")]
+    )
