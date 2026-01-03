@@ -13,20 +13,65 @@ from ui.charts import open_altair_chart
 from ui.controls import spot_slider
 
 def generate_selected_chart(self, spot_override=None):
-    tab_id = self.notebook.select()
-    if not tab_id:
-        return
+    # Initialize tracking sets if needed (do this first for all views)
+    if not hasattr(self, '_generating_charts'):
+        self._generating_charts = set()
+    if not hasattr(self, '_chart_windows'):
+        self._chart_windows = []
+    
+    # Check if we're in single view mode
+    is_single_view = hasattr(self, 'single_view') and self.single_view.winfo_viewable()
+    
+    if is_single_view:
+        # Single view mode - use single_view_symbol
+        if not hasattr(self, 'single_view_symbol'):
+            dialogs.warning("No Ticker", "Please enter and fetch a ticker symbol first.")
+            return
+        
+        symbol = self.single_view_symbol
+        if symbol not in self.ticker_data:
+            dialogs.warning("No Data", "Please fetch data first.")
+            return
+        
+        state = self.ticker_data[symbol]
+        ui = self.ticker_tabs.get(symbol)
+        if not ui:
+            dialogs.warning("No Data", "Please fetch data first.")
+            return
+        
+        exp = ui["exp_var"].get()
+        if not exp:
+            dialogs.warning("No Expiration", "Please select an expiration date.")
+            return
+        
+        # Create chart key - use symbol and exp only to catch duplicate button clicks
+        # (spot_override will be None for button clicks, so we can use a simpler key)
+        chart_key = (symbol, exp, spot_override if spot_override is not None else state.price)
+        
+        # Check if we're already generating this exact chart - do this BEFORE any processing
+        if chart_key in self._generating_charts:
+            # Already generating this chart, skip to prevent duplicates
+            return
+        
+        # Mark as generating IMMEDIATELY to prevent duplicate calls
+        # This must happen before any async operations or delays
+        self._generating_charts.add(chart_key)
+    else:
+        # Multi view mode - use notebook
+        tab_id = self.notebook.select()
+        if not tab_id:
+            return
 
-    symbol = self.notebook.tab(tab_id, "text")
-    if symbol not in self.ticker_data:
-        dialogs.warning("No Data", "Please fetch data first.")
-        return
+        symbol = self.notebook.tab(tab_id, "text")
+        if symbol not in self.ticker_data:
+            dialogs.warning("No Data", "Please fetch data first.")
+            return
 
-    state = self.ticker_data[symbol]
-    ui = self.ticker_tabs[symbol]
-    exp = ui["exp_var"].get()
-    if not exp:
-        return
+        state = self.ticker_data[symbol]
+        ui = self.ticker_tabs[symbol]
+        exp = ui["exp_var"].get()
+        if not exp:
+            return
 
     spot = spot_override if spot_override else state.price
 
@@ -119,9 +164,14 @@ def generate_selected_chart(self, spot_override=None):
         exp_date = exp.split(":")[0]  # Get just the date part
         model_name = self.model_var.get()
         win.title(f"{symbol} {model_name} Exposure - {exp_date}")
-        # Store window reference if we're in a group generation context
-        if hasattr(self, '_chart_windows'):
-            self._chart_windows.append(win)
+        
+        # Initialize chart windows tracking if not exists
+        if not hasattr(self, '_chart_windows'):
+            self._chart_windows = []
+        
+        # Store window reference
+        self._chart_windows.append(win)
+        
         # Embed the chart
         embed_matplotlib_chart(
             win,
@@ -132,6 +182,12 @@ def generate_selected_chart(self, spot_override=None):
             total,
             zero_gamma
         )
+        
+        # Bring window to front immediately after embedding
+        win.update_idletasks()
+        win.lift()
+        win.focus()
+        
         # Bring ALL chart windows to front AFTER chart is embedded
         # (this ensures previous charts don't get pushed behind)
         def bring_all_charts_front():
@@ -150,20 +206,30 @@ def generate_selected_chart(self, spot_override=None):
                         win.focus()
                 except:
                     pass
-        win.update_idletasks()
-        bring_all_charts_front()
-        # Also bring all to front after short delays to ensure they stay
+        
+        # Bring to front after delays to ensure they stay
         win.after(50, bring_all_charts_front)
         win.after(150, bring_all_charts_front)
         win.after(300, bring_all_charts_front)
-
-    # Spot slider - only create if not in group generation mode
-    # (during group generation, we don't want sliders triggering chart regeneration)
-    if not hasattr(self, '_generating_chart_group') or not self._generating_chart_group:
-        for w in self.sidebar.winfo_children():
-            if isinstance(w, (tk.Scale, ctk.CTkSlider)):
-                w.destroy()
-        spot_slider(self.sidebar, spot, self.generate_selected_chart)
+        win.after(500, bring_all_charts_front)
+        
+        # For single view, remove from generating set after a delay
+        if is_single_view:
+            def clear_generating_flag():
+                if hasattr(self, '_generating_charts') and chart_key in self._generating_charts:
+                    self._generating_charts.remove(chart_key)
+            # Clear the flag after chart is fully rendered
+            win.after(1000, clear_generating_flag)
+            
+            # Don't create slider for single view - it causes infinite loops
+            # User can click the button again if they want to change spot price
+        else:
+            # For multi view, create slider immediately
+            if not (hasattr(self, '_generating_chart_group') and self._generating_chart_group):
+                for w in self.sidebar.winfo_children():
+                    if isinstance(w, (tk.Scale, ctk.CTkSlider)):
+                        w.destroy()
+                spot_slider(self.sidebar, spot, self.generate_selected_chart)
 
 
 def generate_chart_group(self):

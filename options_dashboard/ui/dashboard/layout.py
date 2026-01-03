@@ -297,8 +297,9 @@ def show_single_view(self):
         
         price_var = tk.StringVar(value="—")
         exp_var = tk.StringVar()
+        ticker_var = tk.StringVar(value=single_symbol)
         
-        # ---------- Header row (card on left, CSV controls on right) ----------
+        # ---------- Header row (card on left, ticker input in middle, CSV controls on right) ----------
         header_row = ctk.CTkFrame(tab, fg_color="transparent")
         header_row.pack(fill="x", padx=16, pady=16)
         
@@ -306,7 +307,9 @@ def show_single_view(self):
         card = ctk.CTkFrame(header_row, corner_radius=16)
         card.pack(side="left", fill="both", expand=True, padx=(0, 16))
         
-        ctk.CTkLabel(card, text=single_symbol, font=fonts["lg"]).pack(anchor="w", padx=16, pady=(12, 0))
+        # Ticker label (will be updated when ticker changes)
+        ticker_label = ctk.CTkLabel(card, textvariable=ticker_var, font=fonts["lg"])
+        ticker_label.pack(anchor="w", padx=16, pady=(12, 0))
         
         ctk.CTkLabel(
             card,
@@ -322,7 +325,10 @@ def show_single_view(self):
         
         def on_expiration_selected(selected_value):
             exp_var.set(selected_value)
-            self.on_expiration_change(None, single_symbol)
+            # Use current ticker from ticker_var instead of hardcoded single_symbol
+            current_ticker = ticker_var.get().strip().upper()
+            if current_ticker:
+                self.on_expiration_change(None, current_ticker)
         
         exp_dropdown = ctk.CTkOptionMenu(
             row,
@@ -340,12 +346,56 @@ def show_single_view(self):
         chart_button_row = ctk.CTkFrame(card, fg_color="transparent")
         chart_button_row.pack(anchor="w", padx=16, pady=(0, 12))
         
-        ctk.CTkButton(
+        # Store reference to generate chart button so we can enable/disable it
+        self.generate_chart_button = ctk.CTkButton(
             chart_button_row,
             text="Generate Chart",
             command=self.generate_selected_chart,
+            width=150,
+            state="disabled"  # Disabled until fetch completes
+        )
+        self.generate_chart_button.pack(side="left")
+        
+        # Ticker input panel (middle section)
+        ticker_panel = ctk.CTkFrame(header_row, corner_radius=16)
+        ticker_panel.pack(side="left", fill="y", padx=(0, 16))
+        
+        ctk.CTkLabel(
+            ticker_panel,
+            text="Ticker Symbol",
+            font=ctk.CTkFont(size=14, weight="bold")
+        ).pack(pady=(16, 10), padx=16)
+        
+        ticker_entry = ctk.CTkEntry(
+            ticker_panel,
+            textvariable=ticker_var,
+            width=150,
+            font=ctk.CTkFont(size=14),
+            height=36
+        )
+        ticker_entry.pack(pady=5, padx=16)
+        
+        def fetch_single_ticker_data():
+            symbol = ticker_var.get().strip().upper()
+            if not symbol:
+                from ui import dialogs
+                dialogs.warning("Invalid Ticker", "Please enter a ticker symbol.")
+                return
+            
+            # Disable Generate Chart button when starting a new fetch
+            if hasattr(self, 'generate_chart_button'):
+                self.generate_chart_button.configure(state="disabled")
+            
+            # Fetch data for this ticker
+            from ui.dashboard.data_controller import fetch_single_symbol_for_view
+            fetch_single_symbol_for_view(self, symbol, ticker_var, price_var, exp_var, exp_dropdown, ticker_label)
+        
+        ctk.CTkButton(
+            ticker_panel,
+            text="Fetch Options Data",
+            command=fetch_single_ticker_data,
             width=150
-        ).pack(side="left")
+        ).pack(pady=(5, 16), padx=16)
         
         # CSV controls (right side)
         csv_panel = ctk.CTkFrame(header_row, corner_radius=16)
@@ -409,17 +459,25 @@ def show_single_view(self):
         tree.pack(fill="both", expand=True)
         
         # Store in ticker_tabs dict so it works with existing update mechanisms
+        # Use a consistent key for single view - we'll update this when ticker changes
         self.ticker_tabs[single_symbol] = {
             "tab": tab,
             "price_var": price_var,
             "exp_var": exp_var,
             "exp_dropdown": exp_dropdown,
             "tree": tree,
-            "cols": cols
+            "cols": cols,
+            "ticker_var": ticker_var,
+            "ticker_label": ticker_label
         }
         
-        # Store reference to single view symbol
+        # Store reference to single view symbol and UI components
         self.single_view_symbol = single_symbol
+        self.single_view_ticker_var = ticker_var
+        self.single_view_price_var = price_var
+        self.single_view_exp_var = exp_var
+        self.single_view_exp_dropdown = exp_dropdown
+        self.single_view_ticker_label = ticker_label
     
     # Show single view
     self.single_view.pack(fill="both", expand=True)

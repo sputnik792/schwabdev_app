@@ -140,6 +140,115 @@ def fetch_single_symbol(dashboard, symbol):
 
     threading.Thread(target=worker, daemon=True).start()
 
+def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_var, exp_dropdown, ticker_label):
+    """Fetch data for a single ticker in the single view"""
+    symbol = symbol.strip().upper()
+    if not symbol:
+        dialogs.warning("Invalid Ticker", "Please enter a ticker symbol.")
+        return
+
+    def worker():
+        try:
+            price = fetch_stock_price(dashboard.client, symbol)
+            exp_map, expirations = fetch_option_chain(dashboard.client, symbol)
+
+            state = TickerState(
+                symbol=symbol,
+                price=price,
+                exp_data_map=exp_map,
+                last_updated=datetime.datetime.now()
+            )
+
+            def update():
+                dashboard.ticker_data[symbol] = state
+                
+                # Update ticker label
+                ticker_var.set(symbol)
+                ticker_label.configure(text=symbol)
+                
+                # Update price
+                price_var.set(f"${price:.2f}" if price else "—")
+                
+                # Update expiration dropdown
+                if expirations:
+                    exp_dropdown.configure(values=expirations)
+                    exp_var.set(expirations[0])
+                    
+                    # Update the ticker_tabs entry for this symbol
+                    # Remove old entry if symbol changed
+                    if hasattr(dashboard, 'single_view_symbol') and dashboard.single_view_symbol != symbol:
+                        old_symbol = dashboard.single_view_symbol
+                        if old_symbol in dashboard.ticker_tabs:
+                            # Get the UI entry before deleting
+                            ui = dashboard.ticker_tabs[old_symbol]
+                            # Update it with new symbol key
+                            dashboard.ticker_tabs[symbol] = ui
+                            if old_symbol != symbol:
+                                del dashboard.ticker_tabs[old_symbol]
+                    
+                    # Ensure entry exists in ticker_tabs
+                    if symbol not in dashboard.ticker_tabs:
+                        # Get the existing UI components from single view
+                        if hasattr(dashboard, 'single_view_symbol') and dashboard.single_view_symbol in dashboard.ticker_tabs:
+                            ui = dashboard.ticker_tabs[dashboard.single_view_symbol]
+                            dashboard.ticker_tabs[symbol] = ui
+                        else:
+                            # Get tree from single view if available
+                            tree = None
+                            cols = None
+                            if hasattr(dashboard, 'single_view') and dashboard.single_view:
+                                # Try to find the tree widget
+                                for widget in dashboard.single_view.winfo_children():
+                                    if hasattr(widget, 'winfo_children'):
+                                        for child in widget.winfo_children():
+                                            if isinstance(child, tk.ttk.Treeview):
+                                                tree = child
+                                                cols = child['columns']
+                                                break
+                            
+                            # Create entry with UI components
+                            dashboard.ticker_tabs[symbol] = {
+                                "tab": None,
+                                "price_var": price_var,
+                                "exp_var": exp_var,
+                                "exp_dropdown": exp_dropdown,
+                                "tree": tree,
+                                "cols": cols
+                            }
+                    else:
+                        # Update existing entry with current UI components
+                        ui = dashboard.ticker_tabs[symbol]
+                        ui["price_var"] = price_var
+                        ui["exp_var"] = exp_var
+                        ui["exp_dropdown"] = exp_dropdown
+                    
+                    # Update table
+                    dashboard.update_table_for_symbol(symbol, expirations[0])
+                    
+                    # Update single_view_symbol reference
+                    dashboard.single_view_symbol = symbol
+                    
+                    # Enable Generate Chart button if it exists
+                    if hasattr(dashboard, 'generate_chart_button'):
+                        dashboard.generate_chart_button.configure(state="normal")
+                    
+                    # Show completion message for 2 seconds
+                    dialogs.show_timed_message(
+                        dashboard.root,
+                        "Fetch Complete",
+                        f"Successfully fetched options data for {symbol}",
+                        duration_ms=2000
+                    )
+
+            dashboard.root.after(0, update)
+
+        except Exception as e:
+            dashboard.root.after(
+                0, lambda: dialogs.error("Fetch Error", str(e))
+            )
+
+    threading.Thread(target=worker, daemon=True).start()
+
 def fetch_all_stocks(self):
     # Initialize tracking for this fetch operation
     self.fetching_symbols = set(self.preset_tickers)
