@@ -272,6 +272,29 @@ def show_multi_view(self):
     if hasattr(self, 'rebuild_tabs'):
         self.rebuild_tabs()
     
+    # Restore the previously selected tab if it was saved
+    if hasattr(self, '_saved_multi_view_symbol') and self._saved_multi_view_symbol:
+        if hasattr(self, 'notebook') and self.notebook:
+            try:
+                saved_symbol = self._saved_multi_view_symbol
+                # Find the tab with the saved symbol
+                for tab_id in self.notebook.tabs():
+                    tab_symbol = self.notebook.tab(tab_id, "text")
+                    if tab_symbol == saved_symbol:
+                        self.notebook.select(tab_id)
+                        break
+                else:
+                    # Symbol not found (maybe ticker was removed), select first tab
+                    if self.notebook.tabs():
+                        self.notebook.select(0)
+            except:
+                # If restoration fails, just select the first tab
+                if hasattr(self, 'notebook') and self.notebook and self.notebook.tabs():
+                    try:
+                        self.notebook.select(0)
+                    except:
+                        pass
+    
     # Repopulate tables and prices for tickers that already have data
     # This ensures data persists when switching back from single view
     # IMPORTANT: Only use data that was NOT fetched in single view
@@ -328,6 +351,17 @@ def show_single_view(self):
     """Show the single ticker view"""
     # Hide multi view if it exists
     if self.multi_view:
+        # Save the currently selected tab symbol before hiding
+        if hasattr(self, 'notebook') and self.notebook:
+            try:
+                selected_tab_id = self.notebook.select()
+                if selected_tab_id:
+                    # Get the symbol from the tab text to restore later
+                    symbol = self.notebook.tab(selected_tab_id, "text")
+                    if symbol:
+                        self._saved_multi_view_symbol = symbol
+            except:
+                pass
         self.multi_view.pack_forget()
     
     # Create single view if it doesn't exist
