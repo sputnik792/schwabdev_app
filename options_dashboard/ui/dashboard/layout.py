@@ -308,7 +308,9 @@ def show_single_view(self):
         card.pack(side="left", fill="both", expand=True, padx=(0, 16))
         
         # Ticker label (will be updated when ticker changes)
-        ticker_label = ctk.CTkLabel(card, textvariable=ticker_var, font=fonts["lg"])
+        # Use a separate variable for display that starts empty
+        ticker_display_var = tk.StringVar(value="")
+        ticker_label = ctk.CTkLabel(card, textvariable=ticker_display_var, font=fonts["lg"])
         ticker_label.pack(anchor="w", padx=16, pady=(12, 0))
         
         ctk.CTkLabel(
@@ -474,6 +476,7 @@ def show_single_view(self):
         # Store reference to single view symbol and UI components
         self.single_view_symbol = single_symbol
         self.single_view_ticker_var = ticker_var
+        self.single_view_ticker_display_var = ticker_display_var  # Separate display variable
         self.single_view_price_var = price_var
         self.single_view_exp_var = exp_var
         self.single_view_exp_dropdown = exp_dropdown

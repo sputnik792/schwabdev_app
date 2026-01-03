@@ -162,9 +162,9 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
             def update():
                 dashboard.ticker_data[symbol] = state
                 
-                # Update ticker label
+                # Update ticker input (but not display until fetch succeeds)
                 ticker_var.set(symbol)
-                ticker_label.configure(text=symbol)
+                # Don't update display label here - it will be updated after successful fetch
                 
                 # Update price
                 price_var.set(f"${price:.2f}" if price else "—")
@@ -227,6 +227,12 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                     
                     # Update single_view_symbol reference
                     dashboard.single_view_symbol = symbol
+                    
+                    # Update ticker display label only after successful fetch
+                    if hasattr(dashboard, 'single_view_ticker_display_var'):
+                        dashboard.single_view_ticker_display_var.set(symbol)
+                    if hasattr(dashboard, 'single_view_ticker_label'):
+                        dashboard.single_view_ticker_label.configure(text=symbol)
                     
                     # Enable Generate Chart button if it exists
                     if hasattr(dashboard, 'generate_chart_button'):
@@ -342,11 +348,10 @@ def load_csv_index_data(self):
                                             break
                         self.ticker_tabs[display_symbol] = ui
                 
-                # Update ticker label and var
+                # Update ticker input var (but not display until CSV loads successfully)
                 if hasattr(self, 'single_view_ticker_var'):
                     self.single_view_ticker_var.set(display_symbol)
-                if hasattr(self, 'single_view_ticker_label'):
-                    self.single_view_ticker_label.configure(text=display_symbol)
+                # Display will be updated after CSV loads successfully below
                 
                 ui = self.ticker_tabs[display_symbol]
             else:
@@ -365,6 +370,16 @@ def load_csv_index_data(self):
         if expirations:
             ui["exp_var"].set(expirations[0])
             self.update_table_for_symbol(display_symbol, expirations[0])
+
+        # Update ticker display label only after successful CSV load (single view)
+        if is_single_view:
+            if hasattr(self, 'single_view_ticker_display_var'):
+                self.single_view_ticker_display_var.set(display_symbol)
+            if hasattr(self, 'single_view_ticker_label'):
+                self.single_view_ticker_label.configure(text=display_symbol)
+            # Enable Generate Chart button if it exists
+            if hasattr(self, 'generate_chart_button'):
+                self.generate_chart_button.configure(state="normal")
 
         dialogs.info(
             "CSV Loaded",
