@@ -70,7 +70,7 @@ def auto_refresh_options(self):
                     prev_exp = ui["exp_var"].get()
                     state.exp_data_map = exp_map
 
-                    ui["exp_dropdown"]["values"] = expirations
+                    ui["exp_dropdown"].configure(values=expirations)
                     ui["exp_var"].set(
                         prev_exp if prev_exp in expirations else expirations[0]
                     )

@@ -27,7 +27,7 @@ def fetch_worker(self, symbol):
             ui["price_var"].set(f"${price:.2f}" if price else "—")
 
             if expirations:
-                ui["exp_dropdown"]["values"] = expirations
+                ui["exp_dropdown"].configure(values=expirations)
                 ui["exp_var"].set(expirations[0])
                 self.update_table_for_symbol(symbol, expirations[0])
             
@@ -37,6 +37,14 @@ def fetch_worker(self, symbol):
                 
                 # Check if all symbols are done
                 if self.completed_symbols == self.fetching_symbols:
+                    # Close fetching dialog if it exists
+                    if hasattr(self, 'fetching_dialog'):
+                        try:
+                            self.fetching_dialog.destroy()
+                            delattr(self, 'fetching_dialog')
+                        except:
+                            pass
+                    
                     # All done! Show the completion message
                     dialogs.show_timed_message(
                         self.root,
@@ -57,12 +65,19 @@ def fetch_worker(self, symbol):
                     "Authentication Required",
                     "Schwab authentication expired.\nPlease reconnect."
                 )
-                # Mark as completed even on error so we don't wait forever
-                if hasattr(self, 'fetching_symbols') and hasattr(self, 'completed_symbols'):
-                    self.completed_symbols.add(symbol)
-                    if self.completed_symbols == self.fetching_symbols:
-                        self.fetching_symbols.clear()
-                        self.completed_symbols.clear()
+        # Mark as completed even on error so we don't wait forever
+        if hasattr(self, 'fetching_symbols') and hasattr(self, 'completed_symbols'):
+            self.completed_symbols.add(symbol)
+            if self.completed_symbols == self.fetching_symbols:
+                # Close fetching dialog if it exists
+                if hasattr(self, 'fetching_dialog'):
+                    try:
+                        self.fetching_dialog.destroy()
+                        delattr(self, 'fetching_dialog')
+                    except:
+                        pass
+                self.fetching_symbols.clear()
+                self.completed_symbols.clear()
             self.root.after(0, handle_error)
     except Exception as e:
         def handle_error():
@@ -71,6 +86,13 @@ def fetch_worker(self, symbol):
             if hasattr(self, 'fetching_symbols') and hasattr(self, 'completed_symbols'):
                 self.completed_symbols.add(symbol)
                 if self.completed_symbols == self.fetching_symbols:
+                    # Close fetching dialog if it exists
+                    if hasattr(self, 'fetching_dialog'):
+                        try:
+                            self.fetching_dialog.destroy()
+                            delattr(self, 'fetching_dialog')
+                        except:
+                            pass
                     self.fetching_symbols.clear()
                     self.completed_symbols.clear()
         self.root.after(0, handle_error)
@@ -101,7 +123,7 @@ def fetch_single_symbol(dashboard, symbol):
 
                 ui = dashboard.ticker_tabs[symbol]
                 ui["price_var"].set(f"${price:.2f}")
-                ui["exp_dropdown"]["values"] = expirations
+                ui["exp_dropdown"].configure(values=expirations)
                 ui["exp_var"].set(expirations[0])
 
                 dashboard.update_table_for_symbol(symbol, expirations[0])
@@ -119,6 +141,14 @@ def fetch_all_stocks(self):
     # Initialize tracking for this fetch operation
     self.fetching_symbols = set(self.preset_tickers)
     self.completed_symbols = set()
+    
+    # Show fetching dialog
+    if len(self.preset_tickers) > 0:
+        self.fetching_dialog = dialogs.show_fetching_dialog(
+            self.root,
+            "Fetching Options Data",
+            "Fetching options data for all tickers..."
+        )
     
     for symbol in self.preset_tickers:
         threading.Thread(
@@ -164,7 +194,7 @@ def load_csv_index_data(self):
         ui = self.ticker_tabs[display_symbol]
         ui["price_var"].set(f"${spot:.2f}")
 
-        ui["exp_dropdown"]["values"] = expirations
+        ui["exp_dropdown"].configure(values=expirations)
         if expirations:
             ui["exp_var"].set(expirations[0])
             self.update_table_for_symbol(display_symbol, expirations[0])

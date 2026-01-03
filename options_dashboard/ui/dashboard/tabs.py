@@ -38,35 +38,22 @@ def create_stock_tab(self, symbol):
     row.pack(anchor="w", padx=16, pady=(6, 12))
 
     ctk.CTkLabel(row, text="Expiration:", font=fonts["md"], text_color=TEXT_MUTED).pack(side="left")
-    exp_dropdown = ttk.Combobox(row, textvariable=exp_var, state="readonly", width=35, font=("Segoe UI", 13))
+    
+    def on_expiration_selected(selected_value):
+        exp_var.set(selected_value)
+        self.on_expiration_change(None, symbol)
+    
+    exp_dropdown = ctk.CTkOptionMenu(
+        row,
+        variable=exp_var,
+        values=[],  # Will be populated when data is loaded
+        command=on_expiration_selected,
+        width=300,
+        font=ctk.CTkFont(size=14),
+        dropdown_font=ctk.CTkFont(size=16),
+        height=36
+    )
     exp_dropdown.pack(side="left", padx=8)
-    
-    # Configure the dropdown listbox to be bigger when it opens
-    def configure_dropdown_listbox():
-        # Wait a moment for the dropdown to be created, then configure it
-        def configure_after_delay():
-            try:
-                # Find all listbox widgets in the application
-                root = exp_dropdown.winfo_toplevel()
-                # Search for the listbox in the popdown window
-                for widget in root.winfo_children():
-                    if isinstance(widget, tk.Toplevel):
-                        for child in widget.winfo_children():
-                            if isinstance(child, tk.Listbox):
-                                child.configure(font=("Segoe UI", 16), height=12)
-            except:
-                pass
-        
-        # Call after a short delay to allow dropdown to be created
-        exp_dropdown.after(50, configure_after_delay)
-    
-    # Bind to button press to configure dropdown when it opens
-    def on_button_press(event):
-        configure_dropdown_listbox()
-        return None  # Allow default behavior
-    
-    exp_dropdown.bind("<Button-1>", on_button_press)
-    exp_dropdown.bind("<<ComboboxSelected>>", lambda e, s=symbol: self.on_expiration_change(e, s))
 
     # ---------- Table ----------
     table_wrap = ctk.CTkFrame(tab, corner_radius=14)
