@@ -17,9 +17,10 @@ from data.schwab_auth import (
 ctk.set_appearance_mode("dark")  # "dark", "light", or "system"
 
 # Load theme from state, default to first available theme if not set
+# Themes list is now cached to avoid multiple file system scans
 THEME_NAME = get_state_value("color_theme")
 if not THEME_NAME:
-    themes = list_available_themes()
+    themes = list_available_themes()  # This will cache the result for subsequent calls
     THEME_NAME = themes[0] if themes else "breeze"
 
 if THEME_NAME:
@@ -30,6 +31,7 @@ perform_pending_reset()
 def start_dashboard(client):
     # Create app_state.json if it doesn't exist (first-time user)
     if not os.path.exists(STATE_FILE):
+        # Use cached themes if available, otherwise get them
         themes = list_available_themes()
         default_theme = themes[0] if themes else "breeze"
         initial_state = {
@@ -52,6 +54,7 @@ root.minsize(1200, 650)
 if schwab_tokens_exist():
     # Create app_state.json if it doesn't exist (for users upgrading)
     if not os.path.exists(STATE_FILE):
+        # Use cached themes if available
         themes = list_available_themes()
         default_theme = themes[0] if themes else "breeze"
         initial_state = {

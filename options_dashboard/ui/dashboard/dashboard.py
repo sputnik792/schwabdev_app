@@ -73,7 +73,8 @@ class Dashboard(ctk.CTkFrame):
             self.show_multi_view()
         register_theme_change_callback(self.rebuild)
         # Rebuild tabs will be called in show_multi_view if needed
-        self.start_auto_refresh()
+        # Defer auto-refresh start to avoid blocking startup
+        self.root.after(100, self.start_auto_refresh)
 
     def rebuild(self):
         self.destroy()

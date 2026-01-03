@@ -5,12 +5,18 @@ THEME_DIR = Path(__file__).resolve().parent.parent / "import_themes"
 
 _current_theme = None
 _theme_change_callback = None
+_cached_themes = None  # Cache the themes list
 
 
 def list_available_themes():
+    global _cached_themes
+    if _cached_themes is not None:
+        return _cached_themes
     if not THEME_DIR.exists():
+        _cached_themes = []
         return []
-    return sorted(p.stem for p in THEME_DIR.glob("*.json"))
+    _cached_themes = sorted(p.stem for p in THEME_DIR.glob("*.json"))
+    return _cached_themes
 
 
 def register_theme_change_callback(callback):
