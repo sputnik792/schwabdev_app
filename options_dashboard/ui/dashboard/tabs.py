@@ -97,8 +97,11 @@ def update_table_for_symbol(self, symbol, expiration):
     ui = self.ticker_tabs.get(symbol)
     if not ui:
         return
-    tree = ui["tree"]
-    cols = ui["cols"]
+    tree = ui.get("tree")
+    cols = ui.get("cols")
+    if not tree or not cols:
+        # Tree not found - this shouldn't happen but handle gracefully
+        return
     tree.delete(*tree.get_children())
     state = self.ticker_data.get(symbol)
     if not state:
@@ -107,6 +110,7 @@ def update_table_for_symbol(self, symbol, expiration):
     if df is None or df.empty:
         return
 
+    import tkinter as tk
     for _, row in df.iterrows():
         tree.insert(
             "",
