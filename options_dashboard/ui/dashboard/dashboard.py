@@ -33,6 +33,9 @@ class Dashboard(ctk.CTkFrame):
         self.preset_tickers = self.load_preset_tickers()
         self.ticker_tabs = {}
         self.ticker_data = {}
+        # Tracking for fetch completion
+        self.fetching_symbols = set()
+        self.completed_symbols = set()
 
         # ---- binding controllers ----
         self.build_layout = build_layout.__get__(self)

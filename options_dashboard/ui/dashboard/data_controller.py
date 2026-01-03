@@ -30,23 +30,50 @@ def fetch_worker(self, symbol):
                 ui["exp_dropdown"]["values"] = expirations
                 ui["exp_var"].set(expirations[0])
                 self.update_table_for_symbol(symbol, expirations[0])
+            
+            # Mark this symbol as completed
+            if hasattr(self, 'fetching_symbols') and hasattr(self, 'completed_symbols'):
+                self.completed_symbols.add(symbol)
+                
+                # Check if all symbols are done
+                if self.completed_symbols == self.fetching_symbols:
+                    # All done! Show the completion message
+                    dialogs.show_timed_message(
+                        self.root,
+                        "Fetch Complete",
+                        f"All {len(self.fetching_symbols)} tickers loaded successfully!",
+                        3000
+                    )
+                    # Reset tracking for next fetch
+                    self.fetching_symbols.clear()
+                    self.completed_symbols.clear()
 
         self.root.after(0, update_ui)
 
     except RuntimeError as e:
         if str(e) == "AUTH_REQUIRED":
-            self.root.after(
-                0,
-                lambda: dialogs.error(
+            def handle_error():
+                dialogs.error(
                     "Authentication Required",
                     "Schwab authentication expired.\nPlease reconnect."
                 )
-            )
+                # Mark as completed even on error so we don't wait forever
+                if hasattr(self, 'fetching_symbols') and hasattr(self, 'completed_symbols'):
+                    self.completed_symbols.add(symbol)
+                    if self.completed_symbols == self.fetching_symbols:
+                        self.fetching_symbols.clear()
+                        self.completed_symbols.clear()
+            self.root.after(0, handle_error)
     except Exception as e:
-        self.root.after(
-            0,
-            lambda: dialogs.error("Error", f"{symbol}: {e}")
-        )
+        def handle_error():
+            dialogs.error("Error", f"{symbol}: {e}")
+            # Mark as completed even on error so we don't wait forever
+            if hasattr(self, 'fetching_symbols') and hasattr(self, 'completed_symbols'):
+                self.completed_symbols.add(symbol)
+                if self.completed_symbols == self.fetching_symbols:
+                    self.fetching_symbols.clear()
+                    self.completed_symbols.clear()
+        self.root.after(0, handle_error)
 
 def fetch_single_symbol(dashboard, symbol):
     symbol = symbol.strip().upper()
@@ -89,6 +116,10 @@ def fetch_single_symbol(dashboard, symbol):
     threading.Thread(target=worker, daemon=True).start()
 
 def fetch_all_stocks(self):
+    # Initialize tracking for this fetch operation
+    self.fetching_symbols = set(self.preset_tickers)
+    self.completed_symbols = set()
+    
     for symbol in self.preset_tickers:
         threading.Thread(
             target=fetch_worker,
