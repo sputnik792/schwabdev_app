@@ -351,44 +351,94 @@ def load_csv_index_data(self):
         if is_single_view:
             # Single view mode - update the existing single view UI
             if hasattr(self, 'single_view_symbol'):
+                # Get the tree widget first - it's shared across all single view symbols
+                tree = None
+                cols = None
+                
+                # Look for any single view entry to get the tree widget
+                single_view_ui = None
+                for existing_symbol, existing_ui in self.ticker_tabs.items():
+                    if existing_ui.get("_is_single_view") or "ticker_var" in existing_ui:
+                        single_view_ui = existing_ui
+                        tree = existing_ui.get("tree")
+                        cols = existing_ui.get("cols")
+                        break
+                
+                # If still not found, get tree from single view structure
+                if not tree and hasattr(self, 'single_view') and self.single_view:
+                    from tkinter import ttk
+                    def find_tree_recursive(widget):
+                        try:
+                            for child in widget.winfo_children():
+                                if isinstance(child, ttk.Treeview):
+                                    return child, child['columns']
+                                if hasattr(child, 'winfo_children'):
+                                    result = find_tree_recursive(child)
+                                    if result and result[0]:
+                                        return result
+                        except:
+                            pass
+                        return None, None
+                    
+                    tree, cols = find_tree_recursive(self.single_view)
+                
                 # Update the single view symbol to the CSV symbol
                 old_symbol = self.single_view_symbol
                 self.single_view_symbol = display_symbol
                 
                 # Update ticker_tabs entry
                 if old_symbol in self.ticker_tabs:
-                    ui = self.ticker_tabs[old_symbol]
-                    self.ticker_tabs[display_symbol] = ui
-                    if old_symbol != display_symbol:
-                        del self.ticker_tabs[old_symbol]
-                else:
-                    # Get UI components from single view
-                    if hasattr(self, 'single_view_ticker_var'):
+                    old_ui = self.ticker_tabs[old_symbol]
+                    # Only move if it's a single view entry
+                    if old_ui.get("_is_single_view") or "ticker_var" in old_ui:
+                        # Get tree from old entry if we don't have it yet
+                        if not tree and old_ui.get("tree"):
+                            tree = old_ui.get("tree")
+                            cols = old_ui.get("cols")
+                        # Update it with new symbol key, preserving single view components
+                        self.ticker_tabs[display_symbol] = old_ui
+                        if old_symbol != display_symbol:
+                            del self.ticker_tabs[old_symbol]
+                        ui = self.ticker_tabs[display_symbol]
+                        # Ensure tree is set
+                        if tree:
+                            ui["tree"] = tree
+                            ui["cols"] = cols
+                    else:
+                        # Old entry is from multi-view, create new single view entry
                         ui = {
                             "tab": None,
                             "price_var": self.single_view_price_var,
                             "exp_var": self.single_view_exp_var,
                             "exp_dropdown": self.single_view_exp_dropdown,
-                            "tree": None,  # Will be found below
-                            "cols": None
+                            "tree": tree,
+                            "cols": cols,
+                            "ticker_var": self.single_view_ticker_var,
+                            "ticker_label": self.single_view_ticker_label if hasattr(self, 'single_view_ticker_label') else None,
+                            "_is_single_view": True
                         }
-                        # Find the tree widget
-                        if hasattr(self, 'single_view') and self.single_view:
-                            from tkinter import ttk
-                            for widget in self.single_view.winfo_children():
-                                if hasattr(widget, 'winfo_children'):
-                                    for child in widget.winfo_children():
-                                        if isinstance(child, ttk.Treeview):
-                                            ui["tree"] = child
-                                            ui["cols"] = child['columns']
-                                            break
                         self.ticker_tabs[display_symbol] = ui
+                else:
+                    # No old entry, create new single view entry
+                    ui = {
+                        "tab": None,
+                        "price_var": self.single_view_price_var,
+                        "exp_var": self.single_view_exp_var,
+                        "exp_dropdown": self.single_view_exp_dropdown,
+                        "tree": tree,
+                        "cols": cols,
+                        "ticker_var": self.single_view_ticker_var,
+                        "ticker_label": self.single_view_ticker_label if hasattr(self, 'single_view_ticker_label') else None,
+                        "_is_single_view": True
+                    }
+                    self.ticker_tabs[display_symbol] = ui
                 
                 # Update ticker input var (but not display until CSV loads successfully)
                 if hasattr(self, 'single_view_ticker_var'):
                     self.single_view_ticker_var.set(display_symbol)
                 # Display will be updated after CSV loads successfully below
                 
+                # Ensure we have the ui reference
                 ui = self.ticker_tabs[display_symbol]
             else:
                 dialogs.error("CSV Error", "Single view not properly initialized.")
