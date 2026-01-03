@@ -5,6 +5,7 @@ import threading
 import datetime
 import os
 import json
+import re
 
 from options_dashboard.config import MAX_TICKERS, PRESET_FILE
 from options_dashboard.state.ticker_state import TickerState
@@ -282,3 +283,117 @@ class Dashboard(ctk.CTkFrame):
         exp = self.ticker_tabs[symbol]["exp_var"].get()
 
         open_stats_modal(self.root, state, exp)
+
+    def edit_api_credentials(self):
+        """Open window to edit API credentials"""
+        from options_dashboard.config import APP_KEY, SECRET
+        
+        win = ctk.CTkToplevel(self.root)
+        win.title("Edit API Credentials")
+        win.geometry("500x300")
+        win.resizable(False, False)
+        win.transient(self.root)
+        win.lift()
+        win.focus()
+        win.grab_set()
+        
+        # Main container
+        main_frame = ctk.CTkFrame(win)
+        main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        # App Key
+        ctk.CTkLabel(main_frame, text="App Key:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(0, 5))
+        app_key_var = tk.StringVar(value=APP_KEY)
+        app_key_entry = ctk.CTkEntry(main_frame, textvariable=app_key_var, width=450)
+        app_key_entry.pack(fill="x", pady=(0, 15))
+        
+        # Secret Key with show/hide toggle
+        secret_label_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        secret_label_frame.pack(fill="x", pady=(0, 5))
+        
+        ctk.CTkLabel(secret_label_frame, text="Secret Key:", font=ctk.CTkFont(weight="bold")).pack(side="left")
+        
+        # Toggle button for show/hide
+        show_secret_var = tk.BooleanVar(value=False)
+        
+        def toggle_secret_visibility():
+            if show_secret_var.get():
+                secret_entry.configure(show="")
+                show_secret_btn.configure(text="Hide")
+            else:
+                secret_entry.configure(show="*")
+                show_secret_btn.configure(text="Show")
+        
+        show_secret_btn = ctk.CTkButton(
+            secret_label_frame,
+            text="Show",
+            width=60,
+            height=24,
+            font=ctk.CTkFont(size=11),
+            command=lambda: (show_secret_var.set(not show_secret_var.get()), toggle_secret_visibility())
+        )
+        show_secret_btn.pack(side="right", padx=(10, 0))
+        
+        secret_var = tk.StringVar(value=SECRET)
+        secret_entry = ctk.CTkEntry(main_frame, textvariable=secret_var, width=450, show="*")
+        secret_entry.pack(fill="x", pady=(0, 20))
+        
+        # Button frame
+        button_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        button_frame.pack(fill="x", pady=(10, 0))
+        
+        def save_credentials():
+            new_app_key = app_key_var.get().strip()
+            new_secret = secret_var.get().strip()
+            
+            if not new_app_key or not new_secret:
+                dialogs.warning("Invalid Input", "Both App Key and Secret Key are required.")
+                return
+            
+            try:
+                # Read current config.py - get path from config module
+                import options_dashboard.config as config_module
+                from pathlib import Path
+                config_path = Path(config_module.__file__).resolve()
+                
+                with open(config_path, "r") as f:
+                    content = f.read()
+                
+                # Replace APP_KEY and SECRET values
+                content = re.sub(
+                    r'APP_KEY\s*=\s*"[^"]*"',
+                    f'APP_KEY = "{new_app_key}"',
+                    content
+                )
+                content = re.sub(
+                    r'SECRET\s*=\s*"[^"]*"',
+                    f'SECRET = "{new_secret}"',
+                    content
+                )
+                
+                # Write back to config.py
+                with open(config_path, "w") as f:
+                    f.write(content)
+                
+                dialogs.info("Success", "API credentials saved successfully.\nPlease restart the application for changes to take effect.")
+                win.grab_release()
+                win.destroy()
+                
+            except Exception as e:
+                dialogs.error("Error", f"Failed to save credentials:\n{e}")
+        
+        ctk.CTkButton(
+            button_frame,
+            text="Confirm",
+            command=save_credentials,
+            width=120
+        ).pack(side="right", padx=(10, 0))
+        
+        ctk.CTkButton(
+            button_frame,
+            text="Cancel",
+            command=lambda: (win.grab_release(), win.destroy()),
+            width=120,
+            fg_color="transparent",
+            border_width=1
+        ).pack(side="right")

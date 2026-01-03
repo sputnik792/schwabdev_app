@@ -254,6 +254,16 @@ def build_sidebar(self):
     theme_switch.pack(pady=(0, 18))
     # Tooltip
     ToolTip(theme_switch, "Toggle light / dark mode")
+    
+    # Separator
+    ctk.CTkFrame(self.sidebar, height=1).pack(fill="x", pady=5)
+    
+    # API Credentials button
+    ctk.CTkButton(
+        self.sidebar,
+        text="API Credentials",
+        command=self.edit_api_credentials
+    ).pack(fill="x", padx=10, pady=10)
 
 def show_multi_view(self):
     """Show the multi-tab view"""
