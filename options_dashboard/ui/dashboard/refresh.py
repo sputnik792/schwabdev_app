@@ -25,6 +25,14 @@ def auto_refresh_price(self):
                     ui = self.ticker_tabs.get(sym)
                     if not state or not ui:
                         return
+                    
+                    # Skip if this data was fetched in single view
+                    if hasattr(state, '_from_single_view') and state._from_single_view:
+                        return
+                    
+                    # Skip if this is a single view entry (uses _single_ prefix)
+                    if sym.startswith("_single_"):
+                        return
 
                     state.price = price
                     ui["price_var"].set(f"${price:.2f}")
@@ -65,6 +73,14 @@ def auto_refresh_options(self):
                     state = self.ticker_data.get(sym)
                     ui = self.ticker_tabs.get(sym)
                     if not state or not ui:
+                        return
+                    
+                    # Skip if this data was fetched in single view
+                    if hasattr(state, '_from_single_view') and state._from_single_view:
+                        return
+                    
+                    # Skip if this is a single view entry (uses _single_ prefix)
+                    if sym.startswith("_single_"):
                         return
 
                     prev_exp = ui["exp_var"].get()

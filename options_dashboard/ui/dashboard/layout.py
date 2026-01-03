@@ -218,10 +218,13 @@ def show_multi_view(self):
     if self.single_view:
         self.single_view.pack_forget()
         # Clean up single view ticker from ticker_tabs if it exists
-        if hasattr(self, 'single_view_symbol') and self.single_view_symbol in self.ticker_tabs:
-            # Don't delete the data, just remove the UI reference
-            # The data will be reused if the ticker is in preset_tickers
-            pass
+        # Single view entries use the key format "_single_{symbol}"
+        if hasattr(self, 'single_view_symbol'):
+            single_view_key = f"_single_{self.single_view_symbol}"
+            if single_view_key in self.ticker_tabs:
+                # Don't delete the data, just remove the UI reference
+                # The data will be reused if the ticker is in preset_tickers
+                pass
     
     # Create multi view if it doesn't exist
     if not self.multi_view:
@@ -271,10 +274,33 @@ def show_multi_view(self):
     
     # Repopulate tables and prices for tickers that already have data
     # This ensures data persists when switching back from single view
+    # IMPORTANT: Only use data that was NOT fetched in single view
     for symbol in self.preset_tickers:
         if symbol in self.ticker_data and symbol in self.ticker_tabs:
             state = self.ticker_data[symbol]
             ui = self.ticker_tabs[symbol]
+            
+            # Skip if this data was fetched in single view (has _from_single_view flag)
+            if hasattr(state, '_from_single_view') and state._from_single_view:
+                # This data is from single view, don't use it for multi-view
+                continue
+            
+            # Only update if this is a multi-view entry (not single view)
+            # Single view entries use the key format "_single_{symbol}"
+            # Multi-view entries use just the symbol as the key
+            is_single_view_entry = ui.get("_is_single_view") or "ticker_var" in ui
+            if is_single_view_entry:
+                # This is a single view entry, skip it - multi-view should have its own entry
+                # If single view overwrote the multi-view entry, we need to recreate it
+                # Recreate the multi-view entry for this symbol
+                if symbol in self.preset_tickers:
+                    # Recreate the tab to get a fresh multi-view entry
+                    from ui.dashboard.tabs import create_stock_tab
+                    create_stock_tab(self, symbol)
+                    # Get the newly created entry
+                    ui = self.ticker_tabs.get(symbol)
+                    if not ui:
+                        continue
             
             # Update price
             if state.price > 0:
@@ -616,15 +642,29 @@ def show_single_view(self):
     # Single view should be independent - don't auto-populate from multi-view data
     # Only show data that was explicitly fetched in single view
     # When switching to single view, clear it unless it has its own data
-    if hasattr(self, 'single_view_symbol') and self.single_view_symbol in self.ticker_tabs:
+    # Single view entries use the key format "_single_{symbol}"
+    if hasattr(self, 'single_view_symbol'):
         symbol = self.single_view_symbol
-        ui = self.ticker_tabs[symbol]
+        single_view_key = f"_single_{symbol}"
+        ui = self.ticker_tabs.get(single_view_key)
+        
+        # If no single view entry exists, just clear the display
+        if not ui:
+            if hasattr(self, 'single_view_ticker_display_var'):
+                self.single_view_ticker_display_var.set("")
+            if hasattr(self, 'single_view_price_var'):
+                self.single_view_price_var.set("—")
+            if hasattr(self, 'single_view_exp_var'):
+                self.single_view_exp_var.set("")
+            if hasattr(self, 'single_view_exp_dropdown'):
+                self.single_view_exp_dropdown.configure(values=[])
+            return
         
         # Verify this is a single view entry (has _is_single_view marker or ticker_var)
         is_single_view_entry = ui.get("_is_single_view") or "ticker_var" in ui
         
         if not is_single_view_entry:
-            # This is a multi-view entry, don't use it - single view should be independent
+            # This shouldn't happen with the new key format, but handle it just in case
             # Clear the display
             if hasattr(self, 'single_view_ticker_display_var'):
                 self.single_view_ticker_display_var.set("")
@@ -634,8 +674,8 @@ def show_single_view(self):
                 self.single_view_exp_var.set("")
             if hasattr(self, 'single_view_exp_dropdown'):
                 self.single_view_exp_dropdown.configure(values=[])
-            # Clear the table
-            if ui.get("tree"):
+            # Clear the table if tree exists
+            if ui and ui.get("tree"):
                 ui["tree"].delete(*ui["tree"].get_children())
             return
         
