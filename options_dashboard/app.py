@@ -37,5 +37,4 @@ if schwab_tokens_exist():
 else:
     auth = AuthMenu(root, start_dashboard)
 
-
 root.mainloop()
