@@ -2,6 +2,7 @@
 *.pem
 *.csv
 *.txt
+config.py
 
 # ignore all .jsons
 *.json
