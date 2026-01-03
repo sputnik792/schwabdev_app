@@ -30,6 +30,13 @@ def build_layout(self):
         command=self.fetch_all_stocks
     ).pack(side="left", padx=10)
 
+    ctk.CTkButton(
+        top,
+        text="Edit Tickers",
+        width=120,
+        command=self.edit_tickers
+    ).pack(side="left", padx=10)
+
     # ---------- Main ----------
     main = ctk.CTkFrame(self)
     main.pack(fill="both", expand=True, padx=12, pady=(0, 12))

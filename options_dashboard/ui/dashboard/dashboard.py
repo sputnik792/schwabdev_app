@@ -87,6 +87,10 @@ class Dashboard(ctk.CTkFrame):
         win = ctk.CTkToplevel(self.root)
         win.title("Edit Preset Tickers")
         win.geometry("300x300")
+        win.transient(self.root)  # Make it a child window
+        win.lift()  # Bring to front
+        win.focus()  # Give it focus
+        win.grab_set()  # Make it modal
 
         entries = []
 
@@ -106,6 +110,7 @@ class Dashboard(ctk.CTkFrame):
 
             self.save_preset_tickers()
             self.rebuild_tabs()
+            win.grab_release()  # Release grab before destroying
             win.destroy()
 
         ctk.CTkButton(win, text="Save", command=save).pack(pady=10)
