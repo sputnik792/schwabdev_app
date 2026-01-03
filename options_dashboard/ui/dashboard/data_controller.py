@@ -303,11 +303,62 @@ def load_csv_index_data(self):
 
         self.ticker_data[display_symbol] = state
 
-        if display_symbol not in self.ticker_tabs:
-            self.preset_tickers.append(display_symbol)
-            self.create_stock_tab(display_symbol)
+        # Check if we're in single view mode
+        is_single_view = hasattr(self, 'single_view') and self.single_view.winfo_viewable()
+        
+        if is_single_view:
+            # Single view mode - update the existing single view UI
+            if hasattr(self, 'single_view_symbol'):
+                # Update the single view symbol to the CSV symbol
+                old_symbol = self.single_view_symbol
+                self.single_view_symbol = display_symbol
+                
+                # Update ticker_tabs entry
+                if old_symbol in self.ticker_tabs:
+                    ui = self.ticker_tabs[old_symbol]
+                    self.ticker_tabs[display_symbol] = ui
+                    if old_symbol != display_symbol:
+                        del self.ticker_tabs[old_symbol]
+                else:
+                    # Get UI components from single view
+                    if hasattr(self, 'single_view_ticker_var'):
+                        ui = {
+                            "tab": None,
+                            "price_var": self.single_view_price_var,
+                            "exp_var": self.single_view_exp_var,
+                            "exp_dropdown": self.single_view_exp_dropdown,
+                            "tree": None,  # Will be found below
+                            "cols": None
+                        }
+                        # Find the tree widget
+                        if hasattr(self, 'single_view') and self.single_view:
+                            from tkinter import ttk
+                            for widget in self.single_view.winfo_children():
+                                if hasattr(widget, 'winfo_children'):
+                                    for child in widget.winfo_children():
+                                        if isinstance(child, ttk.Treeview):
+                                            ui["tree"] = child
+                                            ui["cols"] = child['columns']
+                                            break
+                        self.ticker_tabs[display_symbol] = ui
+                
+                # Update ticker label and var
+                if hasattr(self, 'single_view_ticker_var'):
+                    self.single_view_ticker_var.set(display_symbol)
+                if hasattr(self, 'single_view_ticker_label'):
+                    self.single_view_ticker_label.configure(text=display_symbol)
+                
+                ui = self.ticker_tabs[display_symbol]
+            else:
+                dialogs.error("CSV Error", "Single view not properly initialized.")
+                return
+        else:
+            # Multi view mode - create a new tab
+            if display_symbol not in self.ticker_tabs:
+                self.preset_tickers.append(display_symbol)
+                self.create_stock_tab(display_symbol)
+            ui = self.ticker_tabs[display_symbol]
 
-        ui = self.ticker_tabs[display_symbol]
         ui["price_var"].set(f"${spot:.2f}")
 
         ui["exp_dropdown"].configure(values=expirations)

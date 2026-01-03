@@ -28,14 +28,54 @@ def load_csv_index(
     except Exception:
         spot_price = 0.0
 
+    # Find where the actual data table starts
+    # CSV format:
+    # Line 1: empty
+    # Line 2: spot price info
+    # Line 3: date/metadata (has 5 columns - this is causing the error)
+    # Line 4: header row with column names
+    # Line 5+: data rows
+    
+    # Skip lines 1-3 (empty, spot price, date metadata) and line 4 (header)
+    # Start reading from line 5 (index 4)
+    skip_rows = 4
+
     # Parse options table
-    df = pd.read_csv(
-        filename,
-        sep=",",
-        header=None,
-        comment="#",
-        skip_blank_lines=True
-    )
+    try:
+        df = pd.read_csv(
+            filename,
+            sep=",",
+            header=None,
+            comment="#",
+            skip_blank_lines=True,
+            skiprows=skip_rows,
+            on_bad_lines='skip'  # Skip malformed lines instead of erroring
+        )
+    except Exception as e:
+        # If that fails, try to auto-detect the header row
+        skip_rows = 0
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#"):
+                comma_count = stripped.count(",")
+                # Header row should have around 20 commas (21 columns)
+                if comma_count >= 18:
+                    # Skip everything up to and including the header
+                    skip_rows = i + 1
+                    break
+        
+        if skip_rows == 0:
+            skip_rows = 4  # Default fallback
+        
+        df = pd.read_csv(
+            filename,
+            sep=",",
+            header=None,
+            comment="#",
+            skip_blank_lines=True,
+            skiprows=skip_rows,
+            on_bad_lines='skip'
+        )
 
     df.columns = [
         "ExpirationDate",

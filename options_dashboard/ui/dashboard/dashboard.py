@@ -284,10 +284,37 @@ class Dashboard(ctk.CTkFrame):
         update_layout()
 
     def open_stats(self):
-        tab_id = self.notebook.select()
-        symbol = self.notebook.tab(tab_id, "text")
+        # Check if we're in single view mode
+        if hasattr(self, 'single_view') and self.single_view.winfo_viewable():
+            # Single view mode - use single_view_symbol
+            if not hasattr(self, 'single_view_symbol'):
+                dialogs.warning("No Ticker", "Please enter and fetch a ticker symbol first.")
+                return
+            symbol = self.single_view_symbol
+        else:
+            # Multi view mode - use notebook
+            if not hasattr(self, 'notebook'):
+                dialogs.warning("No Tabs", "No tabs available.")
+                return
+            tab_id = self.notebook.select()
+            if not tab_id:
+                return
+            symbol = self.notebook.tab(tab_id, "text")
+        
         state = self.ticker_data.get(symbol)
-        exp = self.ticker_tabs[symbol]["exp_var"].get()
+        if not state:
+            dialogs.warning("No Data", "No data available for this ticker.")
+            return
+        
+        ui = self.ticker_tabs.get(symbol)
+        if not ui:
+            dialogs.warning("No Data", "No UI data available for this ticker.")
+            return
+        
+        exp = ui["exp_var"].get()
+        if not exp:
+            dialogs.warning("No Expiration", "Please select an expiration date.")
+            return
 
         open_stats_modal(self.root, state, exp)
 
