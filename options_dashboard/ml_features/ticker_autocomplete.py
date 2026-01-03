@@ -171,10 +171,10 @@ class TickerAutocomplete:
         matches = self._find_matches(current_value)
         
         # Debug output
-        if current_value:
-            print(f"Searching for '{current_value}': found {len(matches)} matches")
-            if matches:
-                print(f"Matches: {matches[:5]}")  # Show first 5
+        # if current_value:
+        #     print(f"Searching for '{current_value}': found {len(matches)} matches")
+        #     if matches:
+        #         print(f"Matches: {matches[:5]}")  # Show first 5
         
         if matches:
             self._show_suggestions(matches)

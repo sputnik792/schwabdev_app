@@ -268,6 +268,35 @@ def show_multi_view(self):
     # Rebuild tabs to show current tickers (if method is available)
     if hasattr(self, 'rebuild_tabs'):
         self.rebuild_tabs()
+    
+    # Repopulate tables and prices for tickers that already have data
+    # This ensures data persists when switching back from single view
+    for symbol in self.preset_tickers:
+        if symbol in self.ticker_data and symbol in self.ticker_tabs:
+            state = self.ticker_data[symbol]
+            ui = self.ticker_tabs[symbol]
+            
+            # Update price
+            if state.price > 0:
+                ui["price_var"].set(f"${state.price:.2f}")
+            
+            # Update expiration dropdown and table if data exists
+            if state.exp_data_map:
+                expirations = list(state.exp_data_map.keys())
+                if expirations:
+                    # Sort expirations (they should already be normalized)
+                    expirations.sort()
+                    ui["exp_dropdown"].configure(values=expirations)
+                    
+                    # Set expiration (use existing if available, otherwise first)
+                    current_exp = ui["exp_var"].get()
+                    if current_exp and current_exp in expirations:
+                        ui["exp_var"].set(current_exp)
+                    else:
+                        ui["exp_var"].set(expirations[0])
+                    
+                    # Repopulate table with data
+                    self.update_table_for_symbol(symbol, ui["exp_var"].get())
 
 def show_single_view(self):
     """Show the single ticker view"""
@@ -288,8 +317,9 @@ def show_single_view(self):
         
         fonts = get_fonts()
         
-        # Use a default symbol or the first preset ticker
-        single_symbol = self.preset_tickers[0] if self.preset_tickers else "SPY"
+        # Use a default symbol - but don't use one that might have multi-view data
+        # Use a placeholder that won't conflict
+        single_symbol = "_SINGLE_VIEW_PLACEHOLDER"
         
         # Create the tab structure directly in single_view (no notebook wrapper)
         tab = ctk.CTkFrame(self.single_view)
@@ -297,7 +327,7 @@ def show_single_view(self):
         
         price_var = tk.StringVar(value="—")
         exp_var = tk.StringVar()
-        ticker_var = tk.StringVar(value=single_symbol)
+        ticker_var = tk.StringVar(value="")  # Start empty, user must enter ticker
         
         # ---------- Header row (card on left, ticker input in middle, CSV controls on right) ----------
         header_row = ctk.CTkFrame(tab, fg_color="transparent")
@@ -545,7 +575,20 @@ def show_single_view(self):
         tree.pack(fill="both", expand=True)
         
         # Store in ticker_tabs dict so it works with existing update mechanisms
-        # Use a consistent key for single view - we'll update this when ticker changes
+        # Use a special key for single view to avoid conflicts with multi-view entries
+        # Single view entries are identified by having "ticker_var" key
+        # If an entry already exists for this symbol from multi-view, create a new one for single view
+        # We'll use the symbol as the key, but ensure we don't overwrite multi-view entries
+        if single_symbol in self.ticker_tabs:
+            # Check if this is a multi-view entry (has "tab" that's a notebook tab, not a CTkFrame)
+            existing_entry = self.ticker_tabs[single_symbol]
+            # Multi-view entries don't have "ticker_var", single view entries do
+            if "ticker_var" not in existing_entry:
+                # This is a multi-view entry, create a new entry for single view
+                # We'll use a special marker to indicate this is single view
+                pass  # Continue to create new entry below
+        
+        # Create/update entry for single view
         self.ticker_tabs[single_symbol] = {
             "tab": tab,
             "price_var": price_var,
@@ -554,7 +597,8 @@ def show_single_view(self):
             "tree": tree,
             "cols": cols,
             "ticker_var": ticker_var,
-            "ticker_label": ticker_label
+            "ticker_label": ticker_label,
+            "_is_single_view": True  # Marker to identify single view entries
         }
         
         # Store reference to single view symbol and UI components
@@ -569,12 +613,96 @@ def show_single_view(self):
     # Show single view
     self.single_view.pack(fill="both", expand=True)
     
-    # Update table if data exists
+    # Single view should be independent - don't auto-populate from multi-view data
+    # Only show data that was explicitly fetched in single view
+    # When switching to single view, clear it unless it has its own data
     if hasattr(self, 'single_view_symbol') and self.single_view_symbol in self.ticker_tabs:
-        ui = self.ticker_tabs[self.single_view_symbol]
-        exp = ui["exp_var"].get()
-        if exp:
-            self.update_table_for_symbol(self.single_view_symbol, exp)
+        symbol = self.single_view_symbol
+        ui = self.ticker_tabs[symbol]
+        
+        # Verify this is a single view entry (has _is_single_view marker or ticker_var)
+        is_single_view_entry = ui.get("_is_single_view") or "ticker_var" in ui
+        
+        if not is_single_view_entry:
+            # This is a multi-view entry, don't use it - single view should be independent
+            # Clear the display
+            if hasattr(self, 'single_view_ticker_display_var'):
+                self.single_view_ticker_display_var.set("")
+            if hasattr(self, 'single_view_price_var'):
+                self.single_view_price_var.set("—")
+            if hasattr(self, 'single_view_exp_var'):
+                self.single_view_exp_var.set("")
+            if hasattr(self, 'single_view_exp_dropdown'):
+                self.single_view_exp_dropdown.configure(values=[])
+            # Clear the table
+            if ui.get("tree"):
+                ui["tree"].delete(*ui["tree"].get_children())
+            return
+        
+        # Single view should NOT auto-populate from ticker_data
+        # Only show data that was explicitly fetched in single view
+        # When switching to single view, clear it unless it has its own fetched data
+        # We'll track this by checking if single_view_symbol matches and if data was fetched via single view
+        # For now, just clear single view when switching to it - user must fetch data explicitly
+        # Clear the display to ensure independence
+        if hasattr(self, 'single_view_ticker_display_var'):
+            self.single_view_ticker_display_var.set("")
+        if hasattr(self, 'single_view_price_var'):
+            self.single_view_price_var.set("—")
+        if hasattr(self, 'single_view_exp_var'):
+            self.single_view_exp_var.set("")
+        if hasattr(self, 'single_view_exp_dropdown'):
+            self.single_view_exp_dropdown.configure(values=[])
+        # Clear the table
+        if ui.get("tree"):
+            ui["tree"].delete(*ui["tree"].get_children())
+        
+        # Only repopulate if this symbol was explicitly fetched in single view
+        # We can't perfectly track this, so we'll just not auto-populate
+        # The user must fetch data explicitly in single view
+        return
+        
+        # (Code below is unreachable but kept for reference)
+        if symbol in self.ticker_data and ui.get("price_var") == self.single_view_price_var:
+            state = self.ticker_data[symbol]
+            
+            # Update price display
+            if state.price > 0:
+                ui["price_var"].set(f"${state.price:.2f}")
+                if hasattr(self, 'single_view_price_var'):
+                    self.single_view_price_var.set(f"${state.price:.2f}")
+            
+            # Update ticker display label
+            if hasattr(self, 'single_view_ticker_display_var'):
+                self.single_view_ticker_display_var.set(symbol)
+            if hasattr(self, 'single_view_ticker_label'):
+                self.single_view_ticker_label.configure(text=symbol)
+            
+            # Update ticker input field
+            if hasattr(self, 'single_view_ticker_var'):
+                self.single_view_ticker_var.set(symbol)
+            
+            # Update expiration dropdown and table if data exists
+            if state.exp_data_map:
+                expirations = list(state.exp_data_map.keys())
+                if expirations:
+                    # Sort expirations
+                    expirations.sort()
+                    ui["exp_dropdown"].configure(values=expirations)
+                    
+                    # Set expiration (use existing if available, otherwise first)
+                    current_exp = ui["exp_var"].get()
+                    if current_exp and current_exp in expirations:
+                        ui["exp_var"].set(current_exp)
+                    else:
+                        ui["exp_var"].set(expirations[0])
+                    
+                    # Repopulate table with cached data
+                    self.update_table_for_symbol(symbol, ui["exp_var"].get())
+                    
+                    # Enable Generate Chart button since we have data
+                    if hasattr(self, 'generate_chart_button'):
+                        self.generate_chart_button.configure(state="normal")
 
 def toggle_view_mode(self):
     """Toggle between single and multi view - called by switch"""

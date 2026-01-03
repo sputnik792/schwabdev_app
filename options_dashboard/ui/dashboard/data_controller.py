@@ -174,53 +174,77 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                     exp_dropdown.configure(values=expirations)
                     exp_var.set(expirations[0])
                     
+                    # Get the single view UI components - these are independent from multi-view
+                    # Find the single view entry (has "_is_single_view" marker or "ticker_var")
+                    single_view_ui = None
+                    if hasattr(dashboard, 'single_view_symbol') and dashboard.single_view_symbol in dashboard.ticker_tabs:
+                        existing_ui = dashboard.ticker_tabs[dashboard.single_view_symbol]
+                        # Check if this is a single view entry
+                        if existing_ui.get("_is_single_view") or "ticker_var" in existing_ui:
+                            single_view_ui = existing_ui
+                    
+                    # If not found, look for any single view entry
+                    if not single_view_ui:
+                        for existing_symbol, existing_ui in dashboard.ticker_tabs.items():
+                            if existing_ui.get("_is_single_view") or "ticker_var" in existing_ui:
+                                single_view_ui = existing_ui
+                                break
+                    
+                    # If still not found, get tree from single view structure
+                    tree = None
+                    cols = None
+                    if single_view_ui:
+                        tree = single_view_ui.get("tree")
+                        cols = single_view_ui.get("cols")
+                    elif hasattr(dashboard, 'single_view') and dashboard.single_view:
+                        # Try to find the tree widget
+                        for widget in dashboard.single_view.winfo_children():
+                            if hasattr(widget, 'winfo_children'):
+                                for child in widget.winfo_children():
+                                    if isinstance(child, tk.ttk.Treeview):
+                                        tree = child
+                                        cols = child['columns']
+                                        break
+                    
                     # Update the ticker_tabs entry for this symbol
-                    # Remove old entry if symbol changed
+                    # Remove old single view entry if symbol changed
                     if hasattr(dashboard, 'single_view_symbol') and dashboard.single_view_symbol != symbol:
                         old_symbol = dashboard.single_view_symbol
                         if old_symbol in dashboard.ticker_tabs:
-                            # Get the UI entry before deleting
-                            ui = dashboard.ticker_tabs[old_symbol]
-                            # Update it with new symbol key
-                            dashboard.ticker_tabs[symbol] = ui
-                            if old_symbol != symbol:
-                                del dashboard.ticker_tabs[old_symbol]
+                            old_ui = dashboard.ticker_tabs[old_symbol]
+                            # Only remove if it's a single view entry
+                            if old_ui.get("_is_single_view") or "ticker_var" in old_ui:
+                                # Update it with new symbol key, preserving single view components
+                                dashboard.ticker_tabs[symbol] = old_ui
+                                if old_symbol != symbol:
+                                    del dashboard.ticker_tabs[old_symbol]
+                                # Update the UI reference
+                                single_view_ui = dashboard.ticker_tabs[symbol]
                     
-                    # Ensure entry exists in ticker_tabs
-                    if symbol not in dashboard.ticker_tabs:
-                        # Get the existing UI components from single view
-                        if hasattr(dashboard, 'single_view_symbol') and dashboard.single_view_symbol in dashboard.ticker_tabs:
-                            ui = dashboard.ticker_tabs[dashboard.single_view_symbol]
-                            dashboard.ticker_tabs[symbol] = ui
-                        else:
-                            # Get tree from single view if available
-                            tree = None
-                            cols = None
-                            if hasattr(dashboard, 'single_view') and dashboard.single_view:
-                                # Try to find the tree widget
-                                for widget in dashboard.single_view.winfo_children():
-                                    if hasattr(widget, 'winfo_children'):
-                                        for child in widget.winfo_children():
-                                            if isinstance(child, tk.ttk.Treeview):
-                                                tree = child
-                                                cols = child['columns']
-                                                break
-                            
-                            # Create entry with UI components
-                            dashboard.ticker_tabs[symbol] = {
-                                "tab": None,
-                                "price_var": price_var,
-                                "exp_var": exp_var,
-                                "exp_dropdown": exp_dropdown,
-                                "tree": tree,
-                                "cols": cols
-                            }
+                    # Ensure entry exists in ticker_tabs for single view
+                    if symbol not in dashboard.ticker_tabs or not (dashboard.ticker_tabs[symbol].get("_is_single_view") or "ticker_var" in dashboard.ticker_tabs[symbol]):
+                        # Create new single view entry with independent UI components
+                        dashboard.ticker_tabs[symbol] = {
+                            "tab": single_view_ui.get("tab") if single_view_ui else None,
+                            "price_var": price_var,
+                            "exp_var": exp_var,
+                            "exp_dropdown": exp_dropdown,
+                            "tree": tree,
+                            "cols": cols,
+                            "ticker_var": ticker_var,
+                            "ticker_label": ticker_label if hasattr(dashboard, 'single_view_ticker_label') else None,
+                            "_is_single_view": True
+                        }
                     else:
-                        # Update existing entry with current UI components
+                        # Update existing single view entry with current UI components
                         ui = dashboard.ticker_tabs[symbol]
                         ui["price_var"] = price_var
                         ui["exp_var"] = exp_var
                         ui["exp_dropdown"] = exp_dropdown
+                        # Ensure tree is set
+                        if tree:
+                            ui["tree"] = tree
+                            ui["cols"] = cols
                     
                     # Update table
                     dashboard.update_table_for_symbol(symbol, expirations[0])
