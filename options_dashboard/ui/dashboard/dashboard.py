@@ -37,6 +37,10 @@ class Dashboard(ctk.CTkFrame):
         # Tracking for fetch completion
         self.fetching_symbols = set()
         self.completed_symbols = set()
+        
+        # CSV variables (initialized early for data_controller access)
+        self.csv_symbol_var = tk.StringVar(value="SPX")
+        self.csv_mode_var = tk.StringVar(value="Default File")
 
         # ---- binding controllers ----
         self.build_layout = build_layout.__get__(self)

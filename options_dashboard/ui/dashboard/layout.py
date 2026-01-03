@@ -59,20 +59,6 @@ def build_layout(self):
         self.view_toggle.select()
     ctk.CTkLabel(toggle_frame, text="Multi", font=fonts["sm"]).pack(side="left", padx=(5, 0))
 
-    ctk.CTkButton(
-        top,
-        text="Fetch All",
-        width=120,
-        command=self.fetch_all_stocks
-    ).pack(side="left", padx=10)
-
-    ctk.CTkButton(
-        top,
-        text="Edit Tickers",
-        width=120,
-        command=self.edit_tickers
-    ).pack(side="left", padx=10)
-
     # ---------- Main ----------
     self.main = ctk.CTkFrame(self)
     self.main.pack(fill="both", expand=True, padx=12, pady=(0, 12))
@@ -151,32 +137,6 @@ def build_sidebar(self):
         command=self.generate_chart_group
     ).pack(fill="x", padx=10, pady=(0, 10))
 
-    # CSV controls
-    ctk.CTkLabel(
-        self.sidebar,
-        text="CSV Index",
-        font=ctk.CTkFont(weight="bold")
-    ).pack(pady=(10, 5))
-
-    self.csv_symbol_var = tk.StringVar(value="SPX")
-    ctk.CTkOptionMenu(
-        self.sidebar,
-        variable=self.csv_symbol_var,
-        values=["SPX", "NDX", "VIX"]
-    ).pack(pady=5)
-
-    self.csv_mode_var = tk.StringVar(value="Default File")
-    ctk.CTkOptionMenu(
-        self.sidebar,
-        variable=self.csv_mode_var,
-        values=["Default File", "Choose CSV File"]
-    ).pack(pady=5)
-
-    ctk.CTkButton(
-        self.sidebar,
-        text="Load CSV Index",
-        command=self.load_csv_index_data
-    ).pack(fill="x", padx=10, pady=10)
 
     ctk.CTkFrame(self.sidebar, height=1).pack(fill="x", pady=5)
     # ----------------------------------
@@ -280,9 +240,27 @@ def show_multi_view(self):
     if not self.multi_view:
         self.multi_view = ctk.CTkFrame(self.content_area, corner_radius=14)
         
+        # ---------- Button bar above tabs ----------
+        button_bar = ctk.CTkFrame(self.multi_view, fg_color="transparent")
+        button_bar.pack(fill="x", padx=16, pady=(16, 8))
+        
+        ctk.CTkButton(
+            button_bar,
+            text="Fetch All",
+            width=120,
+            command=self.fetch_all_stocks
+        ).pack(side="left", padx=(0, 10))
+        
+        ctk.CTkButton(
+            button_bar,
+            text="Edit Tickers",
+            width=120,
+            command=self.edit_tickers
+        ).pack(side="left", padx=10)
+        
         # ---------- Content (tabs) ----------
         self.content = ctk.CTkFrame(self.multi_view, corner_radius=14)
-        self.content.pack(fill="both", expand=True)
+        self.content.pack(fill="both", expand=True, padx=16, pady=(0, 16))
 
         apply_ttk_styles()
         build_tabs(self)
@@ -323,9 +301,13 @@ def show_single_view(self):
         price_var = tk.StringVar(value="—")
         exp_var = tk.StringVar()
         
-        # ---------- Header card ----------
-        card = ctk.CTkFrame(tab, corner_radius=16)
-        card.pack(fill="x", padx=16, pady=16)
+        # ---------- Header row (card on left, CSV controls on right) ----------
+        header_row = ctk.CTkFrame(tab, fg_color="transparent")
+        header_row.pack(fill="x", padx=16, pady=16)
+        
+        # Header card (left side)
+        card = ctk.CTkFrame(header_row, corner_radius=16)
+        card.pack(side="left", fill="both", expand=True, padx=(0, 16))
         
         ctk.CTkLabel(card, text=single_symbol, font=fonts["lg"]).pack(anchor="w", padx=16, pady=(12, 0))
         
@@ -356,6 +338,38 @@ def show_single_view(self):
             height=36
         )
         exp_dropdown.pack(side="left", padx=8)
+        
+        # CSV controls (right side)
+        csv_panel = ctk.CTkFrame(header_row, corner_radius=16)
+        csv_panel.pack(side="right", fill="y")
+        
+        ctk.CTkLabel(
+            csv_panel,
+            text="CSV Index",
+            font=ctk.CTkFont(size=14, weight="bold")
+        ).pack(pady=(16, 10), padx=16)
+        
+        # Use existing CSV variables (initialized in dashboard.py)
+        ctk.CTkOptionMenu(
+            csv_panel,
+            variable=self.csv_symbol_var,
+            values=["SPX", "NDX", "VIX"],
+            width=150
+        ).pack(pady=5, padx=16)
+        
+        ctk.CTkOptionMenu(
+            csv_panel,
+            variable=self.csv_mode_var,
+            values=["Default File", "Choose CSV File"],
+            width=150
+        ).pack(pady=5, padx=16)
+        
+        ctk.CTkButton(
+            csv_panel,
+            text="Load CSV Index",
+            command=self.load_csv_index_data,
+            width=150
+        ).pack(pady=(5, 16), padx=16)
         
         # ---------- Table ----------
         table_wrap = ctk.CTkFrame(tab, corner_radius=14)
