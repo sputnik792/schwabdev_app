@@ -55,6 +55,8 @@ class Dashboard(ctk.CTkFrame):
 
         self.generate_selected_chart = generate_selected_chart.__get__(self)
         self.generate_chart_group = generate_chart_group.__get__(self)
+        from ui.dashboard.charts_controller import _bring_chart_windows_to_front
+        self._bring_chart_windows_to_front = _bring_chart_windows_to_front.__get__(self)
         #---- end of binding controllers
 
         # ---- layout ----

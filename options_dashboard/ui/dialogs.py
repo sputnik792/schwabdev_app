@@ -46,7 +46,8 @@ def show_timed_message(root, title, message, duration_ms=3000):
     dialog.after(duration_ms, dialog.destroy)
 
     dialog.transient(root)
-    dialog.grab_set()
+    # Don't grab focus - this allows other windows to stay in front
+    # dialog.grab_set()  # Commented out to prevent stealing focus
 
 def show_fetching_dialog(root, title="Fetching", message="Fetching options data..."):
     """Show a non-timed dialog that stays open until manually closed"""
