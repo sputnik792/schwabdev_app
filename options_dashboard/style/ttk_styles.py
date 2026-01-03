@@ -6,8 +6,8 @@ def apply_ttk_styles():
 
     style.configure(
         "TNotebook.Tab",
-        padding=[26, 14],
-        font=("Segoe UI", 14)
+        padding=[14, 8],
+        font=("Segoe UI", 13)
     )
 
     style.configure(
