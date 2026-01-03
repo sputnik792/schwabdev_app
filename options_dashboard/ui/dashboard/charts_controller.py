@@ -119,8 +119,7 @@ def generate_selected_chart(self, spot_override=None):
         exp_date = exp.split(":")[0]  # Get just the date part
         model_name = self.model_var.get()
         win.title(f"{symbol} {model_name} Exposure - {exp_date}")
-        # Make window appear in front and stay above main window (but not always on top of everything)
-        win.transient(self.root)  # Makes it stay above main window
+        # Make window appear in front initially
         win.lift()
         win.focus()
         # Store window reference if we're in a group generation context
