@@ -245,12 +245,15 @@ def show_multi_view(self):
             command=self.edit_tickers
         ).pack(side="left", padx=10)
         
-        ctk.CTkButton(
+        # Store reference to chart group button so we can enable/disable it
+        self.generate_chart_group_button = ctk.CTkButton(
             button_bar,
             text="Generate Chart Group",
             width=150,
-            command=self.generate_chart_group
-        ).pack(side="left", padx=10)
+            command=self.generate_chart_group,
+            state="disabled"  # Disabled until fetch all completes
+        )
+        self.generate_chart_group_button.pack(side="left", padx=10)
         
         # ---------- Content (tabs) ----------
         self.content = ctk.CTkFrame(self.multi_view, corner_radius=14)

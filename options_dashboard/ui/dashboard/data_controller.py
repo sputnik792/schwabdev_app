@@ -52,6 +52,9 @@ def fetch_worker(self, symbol):
                         f"All {len(self.fetching_symbols)} tickers loaded successfully!",
                         3000
                     )
+                    # Enable Generate Chart Group button if it exists
+                    if hasattr(self, 'generate_chart_group_button'):
+                        self.generate_chart_group_button.configure(state="normal")
                     # Reset tracking for next fetch
                     self.fetching_symbols.clear()
                     self.completed_symbols.clear()
@@ -141,6 +144,10 @@ def fetch_all_stocks(self):
     # Initialize tracking for this fetch operation
     self.fetching_symbols = set(self.preset_tickers)
     self.completed_symbols = set()
+    
+    # Disable Generate Chart Group button when starting a new fetch
+    if hasattr(self, 'generate_chart_group_button'):
+        self.generate_chart_group_button.configure(state="disabled")
     
     # Show fetching dialog
     if len(self.preset_tickers) > 0:
