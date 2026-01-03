@@ -58,10 +58,20 @@ class Dashboard(ctk.CTkFrame):
 
         # ---- layout ----
         self.pack(fill="both", expand=True)
+        # Bind view methods BEFORE build_layout so toggle callback can use them
+        from ui.dashboard.layout import show_multi_view, show_single_view
+        self.show_multi_view = show_multi_view.__get__(self)
+        self.show_single_view = show_single_view.__get__(self)
         self.build_layout()
-        build_single_stock_panel(self)
+        # Initialize view based on saved state
+        from state.app_state import get_state_value
+        saved_view_mode = get_state_value("view_mode", "multi")
+        if saved_view_mode == "single":
+            self.show_single_view()
+        else:
+            self.show_multi_view()
         register_theme_change_callback(self.rebuild)
-        self.rebuild_tabs()
+        # Rebuild tabs will be called in show_multi_view if needed
         self.start_auto_refresh()
 
     def rebuild(self):

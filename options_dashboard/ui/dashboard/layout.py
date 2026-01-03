@@ -24,6 +24,41 @@ def build_layout(self):
         font=fonts["lg"]
     ).pack(side="left", padx=12)
 
+    # View mode toggle - load from app_state
+    saved_view_mode = get_state_value("view_mode", "multi")
+    if not hasattr(self, 'view_mode'):
+        self.view_mode = tk.StringVar(value=saved_view_mode)
+    
+    toggle_frame = ctk.CTkFrame(top, fg_color="transparent")
+    toggle_frame.pack(side="left", padx=10)
+    
+    ctk.CTkLabel(toggle_frame, text="Single", font=fonts["sm"]).pack(side="left", padx=(0, 5))
+    
+    def on_toggle():
+        if hasattr(self, 'view_toggle'):
+            if self.view_toggle.get():  # Selected = multi
+                self.view_mode.set("multi")
+                set_state_value("view_mode", "multi")
+                if hasattr(self, 'show_multi_view'):
+                    self.show_multi_view()
+            else:  # Unselected = single
+                self.view_mode.set("single")
+                set_state_value("view_mode", "single")
+                if hasattr(self, 'show_single_view'):
+                    self.show_single_view()
+    
+    self.view_toggle = ctk.CTkSwitch(
+        toggle_frame,
+        text="",
+        command=on_toggle,
+        width=50
+    )
+    self.view_toggle.pack(side="left")
+    # Selected = multi mode, Unselected = single mode
+    if self.view_mode.get() == "multi":
+        self.view_toggle.select()
+    ctk.CTkLabel(toggle_frame, text="Multi", font=fonts["sm"]).pack(side="left", padx=(5, 0))
+
     ctk.CTkButton(
         top,
         text="Fetch All",
@@ -39,22 +74,29 @@ def build_layout(self):
     ).pack(side="left", padx=10)
 
     # ---------- Main ----------
-    main = ctk.CTkFrame(self)
-    main.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+    self.main = ctk.CTkFrame(self)
+    self.main.pack(fill="both", expand=True, padx=12, pady=(0, 12))
 
-    # ---------- Sidebar ----------
-    self.sidebar = ctk.CTkFrame(main, width=260)
-    self.sidebar.pack(side="left", fill="y", padx=(0, 12))
-    self.sidebar.pack_propagate(False)
-
+    # ---------- Sidebar (Global - always visible) ----------
+    self.sidebar_container = ctk.CTkFrame(self.main, width=260)
+    self.sidebar_container.pack(side="left", fill="y", padx=(0, 12))
+    self.sidebar_container.pack_propagate(False)
+    
+    # Create scrollable sidebar
+    self.sidebar = ctk.CTkScrollableFrame(self.sidebar_container, width=240)
+    self.sidebar.pack(fill="both", expand=True, padx=10, pady=10)
+    
     build_sidebar(self)
 
-    # ---------- Content ----------
-    self.content = ctk.CTkFrame(main, corner_radius=14)
-    self.content.pack(side="left", fill="both", expand=True)
+    # ---------- Content area (switches between views) ----------
+    self.content_area = ctk.CTkFrame(self.main)
+    self.content_area.pack(side="left", fill="both", expand=True)
 
-    apply_ttk_styles()
-    build_tabs(self)
+    # Store view containers
+    self.multi_view = None
+    self.single_view = None
+    
+    # View will be initialized after methods are bound in dashboard.py
 
 def build_sidebar(self):
     fonts = get_fonts()
@@ -62,8 +104,8 @@ def build_sidebar(self):
     ctk.CTkLabel(
         self.sidebar,
         text="Controls",
-        font=ctk.CTkFont(size=16, weight="bold")
-    ).pack(pady=(10, 15))
+        font=ctk.CTkFont(size=19, weight="bold")
+    ).pack(pady=(10, 8))
 
     # Chart output
     self.chart_output_var = tk.StringVar(value="Desktop")
@@ -107,7 +149,7 @@ def build_sidebar(self):
         self.sidebar,
         text="Generate Chart Group",
         command=self.generate_chart_group
-    ).pack(fill="x", padx=10, pady=(0, 15))
+    ).pack(fill="x", padx=10, pady=(0, 10))
 
     # CSV controls
     ctk.CTkLabel(
@@ -212,6 +254,57 @@ def build_sidebar(self):
     theme_switch.pack(pady=(0, 18))
     # Tooltip
     ToolTip(theme_switch, "Toggle light / dark mode")
+
+def show_multi_view(self):
+    """Show the multi-tab view"""
+    # Hide single view if it exists
+    if self.single_view:
+        self.single_view.pack_forget()
+    
+    # Create multi view if it doesn't exist
+    if not self.multi_view:
+        self.multi_view = ctk.CTkFrame(self.content_area, corner_radius=14)
+        
+        # ---------- Content (tabs) ----------
+        self.content = ctk.CTkFrame(self.multi_view, corner_radius=14)
+        self.content.pack(fill="both", expand=True)
+
+        apply_ttk_styles()
+        build_tabs(self)
+    
+    # Show multi view
+    self.multi_view.pack(fill="both", expand=True)
+    
+    # Rebuild tabs to show current tickers (if method is available)
+    if hasattr(self, 'rebuild_tabs'):
+        self.rebuild_tabs()
+
+def show_single_view(self):
+    """Show the single ticker view"""
+    # Hide multi view if it exists
+    if self.multi_view:
+        self.multi_view.pack_forget()
+    
+    # Create single view if it doesn't exist
+    if not self.single_view:
+        self.single_view = ctk.CTkFrame(self.content_area, corner_radius=14)
+        
+        # Placeholder content
+        placeholder = ctk.CTkLabel(
+            self.single_view,
+            text="Single Ticker View\n(Placeholder)",
+            font=ctk.CTkFont(size=24, weight="bold"),
+            justify="center"
+        )
+        placeholder.pack(expand=True, fill="both")
+    
+    # Show single view
+    self.single_view.pack(fill="both", expand=True)
+
+def toggle_view_mode(self):
+    """Toggle between single and multi view - called by switch"""
+    # This is handled in the on_toggle callback in build_layout
+    pass
 
 def build_tabs(self):
     apply_ttk_styles()
