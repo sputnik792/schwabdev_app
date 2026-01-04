@@ -10,6 +10,8 @@ import os
 import customtkinter as ctk
 import tkinter as tk
 from typing import List, Optional, Callable
+# Import will be done locally to avoid circular imports
+# from data.ticker_history import get_ticker_priority, record_ticker_search
 
 
 class TickerAutocomplete:
@@ -142,13 +144,20 @@ class TickerAutocomplete:
             
             if compare_symbol.startswith(prefix):
                 matches.append(symbol)
-                if len(matches) >= self.max_suggestions:
+                if len(matches) >= self.max_suggestions * 2:  # Get more matches for sorting
                     break
             else:
                 # Since list is sorted, we can stop once we pass the prefix
                 break
         
-        return matches
+        # Sort matches by priority: count (desc), date (desc), alphabetical (asc)
+        # Use get_ticker_priority which returns (-count, -days_since_epoch, ticker)
+        # This tuple sorts correctly: higher count first, then more recent, then alphabetical
+        from data.ticker_history import get_ticker_priority
+        matches.sort(key=lambda ticker: get_ticker_priority(ticker))
+        
+        # Return up to max_suggestions
+        return matches[:self.max_suggestions]
     
     def _on_key_release(self, event):
         """Handle key release events in the entry widget."""
@@ -247,6 +256,10 @@ class TickerAutocomplete:
         self.entry.delete(0, tk.END)
         self.entry.insert(0, ticker)
         self._hide_suggestions()
+        
+        # Record the ticker search in history
+        from data.ticker_history import record_ticker_search
+        record_ticker_search(ticker)
         
         # Call callback if provided
         if self.on_selection:
