@@ -5,7 +5,6 @@ import threading
 import datetime
 import os
 import json
-import re
 
 from options_dashboard.config import MAX_TICKERS, PRESET_FILE
 from options_dashboard.state.ticker_state import TickerState
@@ -452,33 +451,16 @@ class Dashboard(ctk.CTkFrame):
                 return
             
             try:
-                # Read current config.py - get path from config module
-                import options_dashboard.config as config_module
-                from pathlib import Path
-                config_path = Path(config_module.__file__).resolve()
+                # Save to JSON config file using the config loader
+                from options_dashboard.config_loader import save_api_config, CALLBACK_URL
+                success = save_api_config(new_app_key, new_secret, CALLBACK_URL)
                 
-                with open(config_path, "r") as f:
-                    content = f.read()
-                
-                # Replace APP_KEY and SECRET values
-                content = re.sub(
-                    r'APP_KEY\s*=\s*"[^"]*"',
-                    f'APP_KEY = "{new_app_key}"',
-                    content
-                )
-                content = re.sub(
-                    r'SECRET\s*=\s*"[^"]*"',
-                    f'SECRET = "{new_secret}"',
-                    content
-                )
-                
-                # Write back to config.py
-                with open(config_path, "w") as f:
-                    f.write(content)
-                
-                dialogs.info("Success", "API credentials saved successfully.\nPlease restart the application for changes to take effect.")
-                win.grab_release()
-                win.destroy()
+                if success:
+                    dialogs.info("Success", "API credentials saved successfully.\nPlease restart the application for changes to take effect.")
+                    win.grab_release()
+                    win.destroy()
+                else:
+                    dialogs.error("Error", "Failed to save credentials to file.")
                 
             except Exception as e:
                 dialogs.error("Error", f"Failed to save credentials:\n{e}")

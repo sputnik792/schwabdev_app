@@ -2,7 +2,7 @@
 *.pem
 *.csv
 *.txt
-config.py
+api_config.json
 
 # ignore all .jsons
 *.json
