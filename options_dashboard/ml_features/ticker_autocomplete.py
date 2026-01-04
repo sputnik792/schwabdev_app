@@ -137,26 +137,28 @@ class TickerAutocomplete:
         if first_match_idx == -1:
             return []
         
-        # Collect all matches starting from first_match_idx
+        # Collect ALL matches starting with the prefix (not just first few)
+        # We need all matches to properly sort by priority
         for i in range(first_match_idx, len(self.symbols)):
             symbol = self.symbols[i]
             compare_symbol = symbol if self.case_sensitive else symbol.upper()
             
             if compare_symbol.startswith(prefix):
                 matches.append(symbol)
-                if len(matches) >= self.max_suggestions * 2:  # Get more matches for sorting
-                    break
             else:
                 # Since list is sorted, we can stop once we pass the prefix
                 break
         
         # Sort matches by priority: count (desc), date (desc), alphabetical (asc)
         # Use get_ticker_priority which returns (-count, -days_since_epoch, ticker)
-        # This tuple sorts correctly: higher count first, then more recent, then alphabetical
+        # Python's tuple sorting (ascending) works correctly:
+        # - Lower -count = higher count (first priority)
+        # - If counts equal, lower -days = more recent (second priority)
+        # - If both equal, alphabetical by ticker (third priority)
         from data.ticker_history import get_ticker_priority
         matches.sort(key=lambda ticker: get_ticker_priority(ticker))
         
-        # Return up to max_suggestions
+        # Return top max_suggestions after sorting by priority
         return matches[:self.max_suggestions]
     
     def _on_key_release(self, event):
