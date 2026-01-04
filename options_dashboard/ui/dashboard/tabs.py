@@ -5,6 +5,51 @@ from style.theme import *
 from style.theme import get_fonts
 import customtkinter as ctk
 
+def highlight_rows_by_strike(sheet, df, cols, stock_price):
+    """
+    Highlight rows in the sheet based on strike price vs stock price
+    - Strike <= stock_price: light red (#ffcccc) on columns with "put" in name
+    - Strike > stock_price: light green (#ccffcc) on columns with "call" in name
+    """
+    if not sheet or df is None or df.empty or stock_price <= 0:
+        return
+    
+    # Find the Strike column index
+    try:
+        strike_col_idx = cols.index("Strike")
+    except ValueError:
+        # Strike column not found, skip highlighting
+        return
+    
+    # Get number of columns
+    num_cols = len(cols)
+    
+    # Iterate through rows and highlight based on strike price
+    for row_idx, (_, row) in enumerate(df.iterrows()):
+        try:
+            strike = float(row.get("Strike", 0) or 0)
+            if strike <= 0:
+                continue
+            
+            # Determine which columns to highlight based on strike vs stock price
+            if strike <= stock_price:
+                # Light red for strike <= stock price - only highlight "put" columns
+                bg_color = "#ffcccc"
+                # Highlight only columns with "put" in the name (case-insensitive)
+                for col_idx, col_name in enumerate(cols):
+                    if "put" in col_name.lower():
+                        sheet.highlight_cells(row=row_idx, column=col_idx, bg=bg_color)
+            else:
+                # Light green for strike > stock price - only highlight "call" columns
+                bg_color = "#ccffcc"
+                # Highlight only columns with "call" in the name (case-insensitive)
+                for col_idx, col_name in enumerate(cols):
+                    if "call" in col_name.lower():
+                        sheet.highlight_cells(row=row_idx, column=col_idx, bg=bg_color)
+        except (ValueError, TypeError):
+            # Skip rows with invalid strike prices
+            continue
+
 def rebuild_tabs(self):
     for tab in self.notebook.tabs():
         self.notebook.forget(tab)
@@ -133,6 +178,9 @@ def update_table_for_symbol(self, symbol, expiration):
     
     # Update the sheet with new data
     sheet.set_sheet_data(data)
+    
+    # Highlight rows based on strike price vs stock price
+    highlight_rows_by_strike(sheet, df, cols, state.price)
 
 def on_expiration_change(self, event, symbol):
     ui = self.ticker_tabs.get(symbol)

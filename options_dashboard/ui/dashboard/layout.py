@@ -8,6 +8,8 @@ from style.theme_controller import set_theme_from_switch, is_light_mode, current
 from style.tooltip import ToolTip
 from style.custom_theme_controller import list_available_themes, set_color_theme, get_current_theme
 from state.app_state import get_state_value, set_state_value
+from ui.dashboard.tabs import highlight_rows_by_strike
+from ui.dashboard.tabs import highlight_rows_by_strike
 
 def build_layout(self):
     fonts = get_fonts()
@@ -1056,6 +1058,8 @@ def show_single_view(self):
                                     for _, row in df.iterrows():
                                         data.append([str(row.get(c, "")) for c in cols])
                                     sheet.set_sheet_data(data)
+                                    # Highlight rows based on strike price vs stock price
+                                    highlight_rows_by_strike(sheet, df, cols, state.price)
                                 else:
                                     sheet.set_sheet_data([])
                         

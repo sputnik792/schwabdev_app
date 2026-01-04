@@ -5,6 +5,7 @@ from state.ticker_state import TickerState
 from data.schwab_api import fetch_stock_price, fetch_option_chain
 from data.csv_loader import load_csv_index
 from ui import dialogs
+from ui.dashboard.tabs import highlight_rows_by_strike
 
 def fetch_worker(self, symbol):
     try:
@@ -351,6 +352,8 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                                         data.append([str(row.get(c, "")) for c in cols])
                                     print(f"[SINGLE VIEW SAVE] Setting sheet data with {len(data)} rows")
                                     sheet.set_sheet_data(data)
+                                    # Highlight rows based on strike price vs stock price
+                                    highlight_rows_by_strike(sheet, df, cols, price)
                                 else:
                                     print(f"[SINGLE VIEW SAVE] No data, clearing sheet")
                                     sheet.set_sheet_data([])
@@ -644,6 +647,8 @@ def load_csv_index_data(self):
                         for _, row in df.iterrows():
                             data.append([str(row.get(c, "")) for c in cols])
                         sheet.set_sheet_data(data)
+                        # Highlight rows based on strike price vs stock price
+                        highlight_rows_by_strike(sheet, df, cols, state.price)
                     else:
                         sheet.set_sheet_data([])
             else:
