@@ -39,8 +39,7 @@ def build_layout(self):
                 # TODO: Implement save images
                 pass
             elif option == "Auto Refresh":
-                # TODO: Implement auto refresh toggle
-                pass
+                show_auto_refresh_settings(self)
             elif option == "Color Theme":
                 # TODO: Implement color theme selector
                 pass
@@ -59,6 +58,9 @@ def build_layout(self):
                 anchor="w"
             )
             btn.pack(fill="x", pady=5)
+    
+    # Store reference so it can be called from other functions
+    self.show_options_menu = show_options_menu
     
     menu_button = ctk.CTkButton(
         top,
@@ -132,8 +134,141 @@ def build_layout(self):
     
     # View will be initialized after methods are bound in dashboard.py
 
+def show_auto_refresh_settings(dashboard):
+    """Show auto refresh settings window"""
+    from style.theme import get_fonts
+    fonts = get_fonts()
+    
+    settings_window = ctk.CTkToplevel(dashboard.root)
+    settings_window.title("Auto Refresh Settings")
+    settings_window.geometry("400x300")
+    settings_window.transient(dashboard.root)
+    settings_window.grab_set()
+    
+    # Position near the menu button
+    settings_window.geometry("+%d+%d" % (dashboard.root.winfo_x() + 50, dashboard.root.winfo_y() + 80))
+    
+    # Back button in top left
+    back_frame = ctk.CTkFrame(settings_window, fg_color="transparent")
+    back_frame.pack(fill="x", padx=10, pady=10)
+    
+    def go_back():
+        settings_window.destroy()
+        # Recreate the options menu by calling show_options_menu from build_layout
+        # We need to access the function from the dashboard instance
+        if hasattr(dashboard, 'show_options_menu'):
+            dashboard.show_options_menu()
+    
+    back_button = ctk.CTkButton(
+        back_frame,
+        text="← Back",
+        command=go_back,
+        width=80,
+        height=30,
+        anchor="w"
+    )
+    back_button.pack(side="left")
+    
+    # Main content frame
+    content_frame = ctk.CTkFrame(settings_window)
+    content_frame.pack(fill="both", expand=True, padx=20, pady=20)
+    
+    # Ticker Refresh toggle
+    refresh_label = ctk.CTkLabel(
+        content_frame,
+        text="Ticker Refresh:",
+        font=ctk.CTkFont(size=16, weight="bold")
+    )
+    refresh_label.pack(pady=(20, 10))
+    
+    # Load current mode from app state
+    current_mode = get_state_value("ticker_refresh_mode", "auto")
+    
+    mode_frame = ctk.CTkFrame(content_frame, fg_color="transparent")
+    mode_frame.pack(pady=20)
+    
+    ctk.CTkLabel(mode_frame, text="Manual", font=fonts["sm"]).pack(side="left", padx=(0, 10))
+    
+    refresh_mode_var = tk.StringVar(value=current_mode)
+    
+    def on_refresh_mode_toggle():
+        mode = "auto" if refresh_toggle.get() else "manual"
+        refresh_mode_var.set(mode)
+        set_state_value("ticker_refresh_mode", mode)
+        
+        # Update auto refresh behavior
+        if mode == "auto":
+            # Start auto refresh if not already running
+            if hasattr(dashboard, 'start_auto_refresh'):
+                dashboard.start_auto_refresh()
+        else:
+            # Stop auto refresh by not scheduling next refresh
+            # The current refresh will complete but won't schedule another
+            pass
+        
+        # Update sidebar refresh button visibility
+        update_refresh_button_visibility(dashboard)
+        settings_window.destroy()
+    
+    refresh_toggle = ctk.CTkSwitch(
+        mode_frame,
+        text="",
+        command=on_refresh_mode_toggle,
+        width=50
+    )
+    refresh_toggle.pack(side="left")
+    
+    # Set toggle state based on current mode
+    if current_mode == "auto":
+        refresh_toggle.select()
+    
+    ctk.CTkLabel(mode_frame, text="Auto", font=fonts["sm"]).pack(side="left", padx=(10, 0))
+    
+    # Info text
+    info_text = ctk.CTkLabel(
+        content_frame,
+        text="Auto: Tickers refresh automatically every 10s (price) and 30s (options)\nManual: Use 'Refresh Tickers' button in sidebar to refresh",
+        font=fonts["sm"],
+        justify="left"
+    )
+    info_text.pack(pady=20, padx=20)
+
+def update_refresh_button_visibility(dashboard):
+    """Update visibility of Refresh Tickers button based on mode"""
+    mode = get_state_value("ticker_refresh_mode", "auto")
+    
+    # Initialize attribute if it doesn't exist
+    if not hasattr(dashboard, 'refresh_tickers_button'):
+        dashboard.refresh_tickers_button = None
+    
+    if mode == "manual":
+        # Create button if it doesn't exist
+        if dashboard.refresh_tickers_button is None:
+            def manual_refresh_all():
+                """Manually refresh all tickers that have been fetched"""
+                from ui.dashboard.refresh import manual_refresh_all_tickers
+                manual_refresh_all_tickers(dashboard)
+            
+            dashboard.refresh_tickers_button = ctk.CTkButton(
+                dashboard.sidebar,
+                text="Refresh Tickers",
+                command=manual_refresh_all,
+                width=160
+            )
+            # Insert after Stats Breakdown button
+            dashboard.refresh_tickers_button.pack(fill="x", padx=10, pady=6, before=dashboard.sidebar.winfo_children()[1] if len(dashboard.sidebar.winfo_children()) > 1 else None)
+    else:
+        # Remove button if it exists
+        if dashboard.refresh_tickers_button is not None:
+            dashboard.refresh_tickers_button.destroy()
+            dashboard.refresh_tickers_button = None
+
 def build_sidebar(self):
     fonts = get_fonts()
+    
+    # Initialize refresh_tickers_button attribute
+    if not hasattr(self, 'refresh_tickers_button'):
+        self.refresh_tickers_button = None
 
     ctk.CTkLabel(
         self.sidebar,

@@ -80,7 +80,15 @@ class Dashboard(ctk.CTkFrame):
         register_theme_change_callback(self.rebuild)
         # Rebuild tabs will be called in show_multi_view if needed
         # Defer auto-refresh start to avoid blocking startup
-        self.root.after(100, self.start_auto_refresh)
+        # Only start auto-refresh if mode is set to "auto"
+        from state.app_state import get_state_value
+        refresh_mode = get_state_value("ticker_refresh_mode", "auto")
+        if refresh_mode == "auto":
+            self.root.after(100, self.start_auto_refresh)
+        
+        # Update refresh button visibility based on saved mode
+        from ui.dashboard.layout import update_refresh_button_visibility
+        self.root.after(200, lambda: update_refresh_button_visibility(self))
 
     def rebuild(self):
         self.destroy()
