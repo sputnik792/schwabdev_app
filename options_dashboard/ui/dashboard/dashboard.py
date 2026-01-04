@@ -31,11 +31,40 @@ class Dashboard(ctk.CTkFrame):
         self.client = client
 
         # ---- state ----
-        self.preset_tickers = self.load_preset_tickers()
+        # Restore data from previous dashboard instance if it exists (e.g., after theme change)
+        print(f"[DASHBOARD INIT] Checking for saved dashboard state...")
+        print(f"[DASHBOARD INIT] hasattr(root, '_dashboard_state'): {hasattr(root, '_dashboard_state')}")
+        if hasattr(root, '_dashboard_state'):
+            saved_state = root._dashboard_state
+            print(f"[DASHBOARD INIT] Found saved state!")
+            print(f"[DASHBOARD INIT] Saved ticker_data keys: {list(saved_state.get('ticker_data', {}).keys())}")
+            print(f"[DASHBOARD INIT] Saved preset_tickers: {saved_state.get('preset_tickers', [])}")
+            print(f"[DASHBOARD INIT] Saved single_view_symbol: {saved_state.get('single_view_symbol', None)}")
+            
+            self.ticker_data = saved_state.get('ticker_data', {}).copy()
+            self.preset_tickers = saved_state.get('preset_tickers', self.load_preset_tickers()).copy()
+            self.single_view_data_backup = saved_state.get('single_view_data_backup', {}).copy()
+            self.multi_view_data_backup = saved_state.get('multi_view_data_backup', {}).copy()
+            # Store single_view_symbol to restore later
+            self._restored_single_view_symbol = saved_state.get('single_view_symbol', None)
+            
+            print(f"[DASHBOARD INIT] Restored ticker_data keys: {list(self.ticker_data.keys())}")
+            print(f"[DASHBOARD INIT] Restored ticker_data count: {len(self.ticker_data)}")
+            print(f"[DASHBOARD INIT] Restored preset_tickers: {self.preset_tickers}")
+            print(f"[DASHBOARD INIT] Restored single_view_symbol: {self._restored_single_view_symbol}")
+            
+            # Clear the saved state so it doesn't persist beyond this rebuild
+            delattr(root, '_dashboard_state')
+            print(f"[DASHBOARD INIT] Cleared saved state from root")
+        else:
+            print(f"[DASHBOARD INIT] No saved state found, initializing fresh")
+            self.preset_tickers = self.load_preset_tickers()
+            self.ticker_data = {}
+            self.single_view_data_backup = {}  # Backup for single-view data when multi-view overwrites it
+            self.multi_view_data_backup = {}  # Backup for multi-view data when single-view overwrites it
+            self._restored_single_view_symbol = None
+        
         self.ticker_tabs = {}
-        self.ticker_data = {}
-        self.single_view_data_backup = {}  # Backup for single-view data when multi-view overwrites it
-        self.multi_view_data_backup = {}  # Backup for multi-view data when single-view overwrites it
         # Tracking for fetch completion
         self.fetching_symbols = set()
         self.completed_symbols = set()
@@ -72,12 +101,21 @@ class Dashboard(ctk.CTkFrame):
         self.show_multi_view = show_multi_view.__get__(self)
         self.show_single_view = show_single_view.__get__(self)
         self.build_layout()
+        
+        # Restore single_view_symbol if we restored data and were in single view
+        if hasattr(self, '_restored_single_view_symbol') and self._restored_single_view_symbol:
+            self.single_view_symbol = self._restored_single_view_symbol
+            print(f"[DASHBOARD INIT] Restored single_view_symbol: {self.single_view_symbol}")
+        
         # Initialize view based on saved state
         from state.app_state import get_state_value
         saved_view_mode = get_state_value("view_mode", "multi")
+        print(f"[DASHBOARD INIT] Saved view_mode: {saved_view_mode}")
         if saved_view_mode == "single":
+            print(f"[DASHBOARD INIT] Calling show_single_view()")
             self.show_single_view()
         else:
+            print(f"[DASHBOARD INIT] Calling show_multi_view()")
             self.show_multi_view()
         register_theme_change_callback(self.rebuild)
         # Rebuild tabs will be called in show_multi_view if needed
@@ -93,6 +131,25 @@ class Dashboard(ctk.CTkFrame):
         self.root.after(200, lambda: update_refresh_button_visibility(self))
 
     def rebuild(self):
+        # Save dashboard state to root window so it persists across rebuild
+        # This preserves option data when color theme changes
+        print(f"[REBUILD] Saving dashboard state before rebuild...")
+        print(f"[REBUILD] ticker_data keys: {list(self.ticker_data.keys())}")
+        print(f"[REBUILD] ticker_data count: {len(self.ticker_data)}")
+        print(f"[REBUILD] preset_tickers: {self.preset_tickers}")
+        print(f"[REBUILD] single_view_symbol: {getattr(self, 'single_view_symbol', None)}")
+        print(f"[REBUILD] single_view_data_backup keys: {list(self.single_view_data_backup.keys()) if hasattr(self, 'single_view_data_backup') else 'N/A'}")
+        print(f"[REBUILD] multi_view_data_backup keys: {list(self.multi_view_data_backup.keys()) if hasattr(self, 'multi_view_data_backup') else 'N/A'}")
+        
+        self.root._dashboard_state = {
+            'ticker_data': self.ticker_data.copy(),
+            'preset_tickers': self.preset_tickers.copy(),
+            'single_view_data_backup': self.single_view_data_backup.copy() if hasattr(self, 'single_view_data_backup') else {},
+            'multi_view_data_backup': self.multi_view_data_backup.copy() if hasattr(self, 'multi_view_data_backup') else {},
+            'single_view_symbol': getattr(self, 'single_view_symbol', None),
+        }
+        print(f"[REBUILD] Saved state to root._dashboard_state")
+        print(f"[REBUILD] Saved ticker_data keys: {list(self.root._dashboard_state['ticker_data'].keys())}")
         self.destroy()
         Dashboard(self.root, self.client)
 

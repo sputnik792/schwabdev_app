@@ -590,22 +590,37 @@ def show_multi_view(self):
     # Repopulate tables and prices for tickers that already have data
     # This ensures data persists when switching back from single view
     # IMPORTANT: Only use data that was NOT fetched in single view
+    print(f"[SHOW_MULTI_VIEW] Starting data restoration...")
+    print(f"[SHOW_MULTI_VIEW] preset_tickers: {self.preset_tickers}")
+    print(f"[SHOW_MULTI_VIEW] ticker_data keys: {list(self.ticker_data.keys())}")
+    print(f"[SHOW_MULTI_VIEW] ticker_data count: {len(self.ticker_data)}")
+    print(f"[SHOW_MULTI_VIEW] multi_view_data_backup keys: {list(self.multi_view_data_backup.keys()) if hasattr(self, 'multi_view_data_backup') else 'N/A'}")
+    
     for symbol in self.preset_tickers:
+        print(f"[SHOW_MULTI_VIEW] Processing symbol: {symbol}")
         # Check backup first (multi-view data that was preserved when single-view overwrote it)
         state = None
         if hasattr(self, 'multi_view_data_backup') and symbol in self.multi_view_data_backup:
             state = self.multi_view_data_backup[symbol]
+            print(f"[SHOW_MULTI_VIEW] Found {symbol} in multi_view_data_backup")
         # Then check ticker_data
         elif symbol in self.ticker_data:
             state = self.ticker_data[symbol]
+            print(f"[SHOW_MULTI_VIEW] Found {symbol} in ticker_data")
+        else:
+            print(f"[SHOW_MULTI_VIEW] No data found for {symbol}")
         
         if state and symbol in self.ticker_tabs:
             ui = self.ticker_tabs[symbol]
+            print(f"[SHOW_MULTI_VIEW] Found UI for {symbol}, checking state...")
             
             # Skip if this data was fetched in single view (has _from_single_view flag)
             if hasattr(state, '_from_single_view') and state._from_single_view:
                 # This data is from single view, don't use it for multi-view
+                print(f"[SHOW_MULTI_VIEW] Skipping {symbol} - data is from single view")
                 continue
+            
+            print(f"[SHOW_MULTI_VIEW] Restoring data for {symbol}...")
             
             # Only update if this is a multi-view entry (not single view)
             # Single view entries use the key format "_single_{symbol}"
@@ -644,7 +659,13 @@ def show_multi_view(self):
                         ui["exp_var"].set(expirations[0])
                     
                     # Repopulate table with data
+                    print(f"[SHOW_MULTI_VIEW] Calling update_table_for_symbol for {symbol} with expiration {ui['exp_var'].get()}")
                     self.update_table_for_symbol(symbol, ui["exp_var"].get())
+                    print(f"[SHOW_MULTI_VIEW] Completed restoration for {symbol}")
+        elif state:
+            print(f"[SHOW_MULTI_VIEW] Has state for {symbol} but no UI in ticker_tabs (key not found)")
+    
+    print(f"[SHOW_MULTI_VIEW] Finished data restoration")
 
 def show_single_view(self):
     """Show the single ticker view"""
@@ -678,7 +699,11 @@ def show_single_view(self):
         
         # Use a default symbol - but don't use one that might have multi-view data
         # Use a placeholder that won't conflict
-        single_symbol = "_SINGLE_VIEW_PLACEHOLDER"
+        # However, if single_view_symbol already exists (e.g., after rebuild), preserve it
+        if hasattr(self, 'single_view_symbol') and self.single_view_symbol and self.single_view_symbol != "_SINGLE_VIEW_PLACEHOLDER":
+            single_symbol = self.single_view_symbol
+        else:
+            single_symbol = "_SINGLE_VIEW_PLACEHOLDER"
         
         # Create the tab structure directly in single_view (no notebook wrapper)
         tab = ctk.CTkFrame(self.single_view)
@@ -978,7 +1003,9 @@ def show_single_view(self):
         }
         
         # Store reference to single view symbol and UI components
-        self.single_view_symbol = single_symbol
+        # Only set if it doesn't already exist (to preserve restored value after rebuild)
+        if not hasattr(self, 'single_view_symbol') or not self.single_view_symbol or self.single_view_symbol == "_SINGLE_VIEW_PLACEHOLDER":
+            self.single_view_symbol = single_symbol
         self.single_view_ticker_var = ticker_var
         self.single_view_ticker_display_var = ticker_display_var  # Separate display variable
         self.single_view_price_var = price_var
@@ -986,6 +1013,26 @@ def show_single_view(self):
         self.single_view_exp_dropdown = exp_dropdown
         self.single_view_ticker_label = ticker_label
         self.single_view_options_na_label = options_na_label  # Store reference to N/A label
+        
+        # If we have a restored single_view_symbol (e.g., after rebuild), create the UI entry for it
+        # This allows the restoration logic to find and restore the data
+        if hasattr(self, 'single_view_symbol') and self.single_view_symbol and self.single_view_symbol != "_SINGLE_VIEW_PLACEHOLDER":
+            restored_symbol = self.single_view_symbol
+            single_view_key = f"_single_{restored_symbol}"
+            print(f"[SHOW_SINGLE_VIEW] Creating UI entry for restored symbol: {restored_symbol}, key: {single_view_key}")
+            # Create the entry using the single_view UI components
+            self.ticker_tabs[single_view_key] = {
+                "price_var": price_var,
+                "exp_var": exp_var,
+                "exp_dropdown": exp_dropdown,
+                "sheet": sheet,
+                "cols": cols,
+                "headers": headers,
+                "ticker_var": ticker_var,
+                "ticker_label": ticker_label,
+                "_is_single_view": True  # Marker to identify single view entries
+            }
+            print(f"[SHOW_SINGLE_VIEW] Created entry, ticker_tabs keys: {list(self.ticker_tabs.keys())}")
     
     # Show single view
     self.single_view.pack(fill="both", expand=True)
