@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
+from tksheet import Sheet
 from style.theme import *
 from style.theme import get_fonts
 import customtkinter as ctk
@@ -69,7 +70,7 @@ def create_stock_tab(self, symbol):
     # ---------- Table ----------
     table_wrap = ctk.CTkFrame(tab, corner_radius=14)
     table_wrap.pack(fill="both", expand=True, padx=16, pady=(0, 16))
-
+    
     cols = [
         "Bid_Call","Ask_Call","Delta_Call","Theta_Call","Gamma_Call","IV_Call","OI_Call",
         "Strike",
@@ -80,54 +81,58 @@ def create_stock_tab(self, symbol):
         "Strike",
         "Put Bid","Put Ask","Δ(Put)","Θ(Put)","Γ(Put)","IV(Put)","OI(Put)"
     ]
-
-    tree = ttk.Treeview(table_wrap, columns=cols, show="headings")
-
-    for c, h in zip(cols, headers):
-        tree.heading(c, text=h)
-        tree.column(c, width=110, anchor="center")
-    vsb = ttk.Scrollbar(table_wrap, orient="vertical", command=tree.yview)
-    hsb = ttk.Scrollbar(table_wrap, orient="horizontal", command=tree.xview)
-
-    tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
-
-    vsb.pack(side="right", fill="y")
-    hsb.pack(side="bottom", fill="x")
-    tree.pack(fill="both", expand=True)
+    
+    # Create tksheet instead of Treeview
+    sheet = Sheet(
+        table_wrap,
+        data=[],  # Start with empty data
+        headers=headers,
+        show_row_index=False,
+        show_top_left=False,
+        empty_horizontal=0,
+        empty_vertical=0
+    )
+    # Set larger font size for better readability
+    sheet.font(newfont=("Segoe UI", 12, "normal"))
+    sheet.enable_bindings("all")
+    sheet.pack(fill="both", expand=True)
 
     self.ticker_tabs[symbol] = {
         "tab": tab,
         "price_var": price_var,
         "exp_var": exp_var,
         "exp_dropdown": exp_dropdown,
-        "tree": tree,
-        "cols": cols
+        "sheet": sheet,
+        "cols": cols,
+        "headers": headers
     }
 
 def update_table_for_symbol(self, symbol, expiration):
     ui = self.ticker_tabs.get(symbol)
     if not ui:
         return
-    tree = ui.get("tree")
+    sheet = ui.get("sheet")
     cols = ui.get("cols")
-    if not tree or not cols:
-        # Tree not found - this shouldn't happen but handle gracefully
+    if not sheet or not cols:
+        # Sheet not found - this shouldn't happen but handle gracefully
         return
-    tree.delete(*tree.get_children())
+    
     state = self.ticker_data.get(symbol)
     if not state:
         return
     df = state.exp_data_map.get(expiration)
     if df is None or df.empty:
+        # Clear the sheet if no data
+        sheet.set_sheet_data([])
         return
 
-    import tkinter as tk
+    # Convert DataFrame to list of lists for tksheet
+    data = []
     for _, row in df.iterrows():
-        tree.insert(
-            "",
-            tk.END,
-            values=[row.get(c, "") for c in cols]
-        )
+        data.append([str(row.get(c, "")) for c in cols])
+    
+    # Update the sheet with new data
+    sheet.set_sheet_data(data)
 
 def on_expiration_change(self, event, symbol):
     ui = self.ticker_tabs.get(symbol)

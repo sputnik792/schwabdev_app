@@ -19,7 +19,23 @@ def fetch_worker(self, symbol):
         )
 
         def update_ui():
+            # Multi-view should always fetch and store its own data for preset tickers
+            # But we need to preserve single-view data if it exists
+            # Check if there's existing single-view data and back it up
+            existing_state = self.ticker_data.get(symbol)
+            if existing_state and hasattr(existing_state, '_from_single_view') and existing_state._from_single_view:
+                # Backup single-view data before overwriting
+                if not hasattr(self, 'single_view_data_backup'):
+                    self.single_view_data_backup = {}
+                self.single_view_data_backup[symbol] = existing_state
+                print(f"[MULTI VIEW] Backed up single-view data for {symbol} before overwriting")
+            
+            # Store multi-view data (without _from_single_view flag, or explicitly mark as multi-view)
+            state._from_single_view = False  # Explicitly mark as multi-view data
             self.ticker_data[symbol] = state
+            # Also update backup if it exists (in case it was backed up before)
+            if hasattr(self, 'multi_view_data_backup'):
+                self.multi_view_data_backup[symbol] = state
             ui = self.ticker_tabs.get(symbol)
             if not ui:
                 return
@@ -161,9 +177,20 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
 
             def update():
                 # Store data with a flag to indicate it's from single view
-                # This prevents multi-view from using this data
+                # But first, preserve multi-view data if it exists
+                existing_state = dashboard.ticker_data.get(symbol)
+                if existing_state and (not hasattr(existing_state, '_from_single_view') or not existing_state._from_single_view):
+                    # Backup multi-view data before overwriting
+                    if not hasattr(dashboard, 'multi_view_data_backup'):
+                        dashboard.multi_view_data_backup = {}
+                    dashboard.multi_view_data_backup[symbol] = existing_state
+                    print(f"[SINGLE VIEW] Backed up multi-view data for {symbol} before overwriting")
+                
                 state._from_single_view = True
                 dashboard.ticker_data[symbol] = state
+                # Also update backup if it exists (in case it was backed up before)
+                if hasattr(dashboard, 'single_view_data_backup'):
+                    dashboard.single_view_data_backup[symbol] = state
                 print(f"[SINGLE VIEW SAVE] ========== SAVING DATA ==========")
                 print(f"[SINGLE VIEW SAVE] Symbol: {symbol}")
                 print(f"[SINGLE VIEW SAVE] Set _from_single_view = True on state object")
@@ -188,37 +215,51 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                     print(f"[SINGLE VIEW SAVE] Updated price_var")
                     
                     # Get the single view UI components - these are independent from multi-view
-                    # First, try to get tree from stored single view components
-                    tree = None
+                    # First, try to get sheet from stored single view components
+                    sheet = None
                     cols = None
                     
-                    # Look for any single view entry to get the tree widget (it's the same tree for all symbols)
-                    # Single view entries use the key format "_single_{symbol}"
+                    # Look for any single view entry to get the sheet widget (it's the same sheet for all symbols)
+                    # Single view entries use the key format "_single_{symbol}" or "_SINGLE_VIEW_PLACEHOLDER"
                     single_view_ui = None
-                    for existing_key, existing_ui in dashboard.ticker_tabs.items():
-                        if existing_key.startswith("_single_") and (existing_ui.get("_is_single_view") or "ticker_var" in existing_ui):
-                            single_view_ui = existing_ui
-                            tree = existing_ui.get("tree")
-                            cols = existing_ui.get("cols")
-                            break
+                    # First try to find the placeholder entry (created in layout.py)
+                    if "_SINGLE_VIEW_PLACEHOLDER" in dashboard.ticker_tabs:
+                        placeholder_ui = dashboard.ticker_tabs["_SINGLE_VIEW_PLACEHOLDER"]
+                        if placeholder_ui.get("_is_single_view") or "ticker_var" in placeholder_ui:
+                            single_view_ui = placeholder_ui
+                            sheet = placeholder_ui.get("sheet")
+                            cols = placeholder_ui.get("cols")
                     
-                    # If still not found, get tree from single view structure
-                    if not tree and hasattr(dashboard, 'single_view') and dashboard.single_view:
-                        import tkinter.ttk as ttk
-                        def find_tree_recursive(widget):
+                    # If not found, look for any other single view entry
+                    if not sheet:
+                        for existing_key, existing_ui in dashboard.ticker_tabs.items():
+                            if existing_key.startswith("_single_") and (existing_ui.get("_is_single_view") or "ticker_var" in existing_ui):
+                                single_view_ui = existing_ui
+                                sheet = existing_ui.get("sheet")
+                                cols = existing_ui.get("cols")
+                                if sheet:  # Found sheet, break
+                                    break
+                    
+                    # If still not found, get sheet from single view structure
+                    if not sheet and hasattr(dashboard, 'single_view') and dashboard.single_view:
+                        from tksheet import Sheet
+                        def find_sheet_recursive(widget):
                             try:
                                 for child in widget.winfo_children():
-                                    if isinstance(child, ttk.Treeview):
-                                        return child, child['columns']
+                                    if isinstance(child, Sheet):
+                                        return child, child.headers()
                                     if hasattr(child, 'winfo_children'):
-                                        result = find_tree_recursive(child)
+                                        result = find_sheet_recursive(child)
                                         if result and result[0]:
                                             return result
                             except:
                                 pass
                             return None, None
                         
-                        tree, cols = find_tree_recursive(dashboard.single_view)
+                        sheet, _ = find_sheet_recursive(dashboard.single_view)
+                        # Get cols from the UI entry if available
+                        if single_view_ui:
+                            cols = single_view_ui.get("cols")
                     
                     # Use a separate key for single view entries to avoid overwriting multi-view entries
                     # This ensures multi-view and single view entries are completely independent
@@ -230,9 +271,9 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                         old_single_key = f"_single_{old_symbol}"
                         if old_single_key in dashboard.ticker_tabs:
                             old_ui = dashboard.ticker_tabs[old_single_key]
-                            # Get tree from old entry if we don't have it yet
-                            if not tree and old_ui.get("tree"):
-                                tree = old_ui.get("tree")
+                            # Get sheet from old entry if we don't have it yet
+                            if not sheet and old_ui.get("sheet"):
+                                sheet = old_ui.get("sheet")
                                 cols = old_ui.get("cols")
                             # Delete old single view entry
                             del dashboard.ticker_tabs[old_single_key]
@@ -240,18 +281,32 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                     # Always create/update single view entry under the special key
                     # This NEVER overwrites multi-view entries
                     # IMPORTANT: Do this even if there are no expirations, so single_view_symbol gets updated
+                    # Make sure we have cols - get from single_view_ui if we don't have it
+                    if not cols and single_view_ui:
+                        cols = single_view_ui.get("cols")
+                    # If still no cols, try to get headers and convert
+                    if not cols and single_view_ui:
+                        headers = single_view_ui.get("headers")
+                        if headers:
+                            # Headers should match the cols order, but we need the actual col names
+                            # For now, use a default set if we can't find it
+                            pass
+                    
                     dashboard.ticker_tabs[single_view_key] = {
                         "tab": single_view_ui.get("tab") if single_view_ui else None,
                         "price_var": price_var,
                         "exp_var": exp_var,
                         "exp_dropdown": exp_dropdown,
-                        "tree": tree,
+                        "sheet": sheet,
                         "cols": cols,
+                        "headers": single_view_ui.get("headers") if single_view_ui else None,
                         "ticker_var": ticker_var,
                         "ticker_label": ticker_label if hasattr(dashboard, 'single_view_ticker_label') else None,
                         "_is_single_view": True,
                         "_symbol": symbol  # Store the actual symbol for reference
                     }
+                    
+                    print(f"[SINGLE VIEW SAVE] Stored entry - sheet={sheet is not None}, cols={cols is not None}")
                     
                     # Update single_view_symbol reference - ALWAYS do this, even if no expirations
                     dashboard.single_view_symbol = symbol
@@ -268,29 +323,49 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                         exp_dropdown.configure(values=expirations)
                         exp_var.set(expirations[0])
                         
-                        # Update table - ONLY update single view entry's tree directly
+                        # Update table - ONLY update single view entry's sheet directly
                         # The multi-view entry (if it exists) is completely untouched
-                        if tree and state.exp_data_map:
+                        print(f"[SINGLE VIEW SAVE] Updating table - sheet={sheet is not None}, exp_data_map={state.exp_data_map is not None}")
+                        if sheet and state.exp_data_map:
                             # Clear and repopulate the single view table directly
-                            tree.delete(*tree.get_children())
+                            # If cols not found, try to get from the stored entry
+                            if not cols:
+                                # Try to get cols from the single_view_key entry we just created
+                                stored_entry = dashboard.ticker_tabs.get(single_view_key)
+                                if stored_entry:
+                                    cols = stored_entry.get("cols")
+                                # If still not found, try from placeholder entry
+                                if not cols:
+                                    placeholder_entry = dashboard.ticker_tabs.get("_SINGLE_VIEW_PLACEHOLDER")
+                                    if placeholder_entry:
+                                        cols = placeholder_entry.get("cols")
+                            
+                            print(f"[SINGLE VIEW SAVE] cols={cols}, expirations[0]={expirations[0] if expirations else None}")
                             if cols:
                                 df = state.exp_data_map.get(expirations[0])
+                                print(f"[SINGLE VIEW SAVE] df={df is not None and not df.empty if df is not None else False}, rows={len(df) if df is not None and not df.empty else 0}")
                                 if df is not None and not df.empty:
-                                    import tkinter as tk
+                                    # Convert DataFrame to list of lists for tksheet
+                                    data = []
                                     for _, row in df.iterrows():
-                                        tree.insert(
-                                            "",
-                                            tk.END,
-                                            values=[row.get(c, "") for c in cols]
-                                        )
+                                        data.append([str(row.get(c, "")) for c in cols])
+                                    print(f"[SINGLE VIEW SAVE] Setting sheet data with {len(data)} rows")
+                                    sheet.set_sheet_data(data)
+                                else:
+                                    print(f"[SINGLE VIEW SAVE] No data, clearing sheet")
+                                    sheet.set_sheet_data([])
+                            else:
+                                print(f"[SINGLE VIEW SAVE] WARNING: cols is None, cannot update table")
+                        else:
+                            print(f"[SINGLE VIEW SAVE] WARNING: sheet={sheet is not None}, exp_data_map={state.exp_data_map is not None}")
                     else:
                         # No expirations - show "Options N/A" message and clear dropdown/table
                         if hasattr(dashboard, 'single_view_options_na_label'):
                             dashboard.single_view_options_na_label.pack(side="left", padx=(8, 0))
                         
                         exp_dropdown.configure(values=[])
-                        if tree:
-                            tree.delete(*tree.get_children())
+                        if sheet:
+                            sheet.set_sheet_data([])
                     
                     # Update ticker display label only after successful fetch
                     # Do this for ALL tickers, even those without options
@@ -395,103 +470,143 @@ def load_csv_index_data(self):
             is_csv=True
         )
 
-        self.ticker_data[display_symbol] = state
-
         # Check if we're in single view mode
         is_single_view = hasattr(self, 'single_view') and self.single_view.winfo_viewable()
+        
+        # If loading in single view, preserve multi-view data and mark CSV as single-view data
+        if is_single_view:
+            # Backup multi-view data if it exists before overwriting
+            existing_state = self.ticker_data.get(display_symbol)
+            if existing_state and (not hasattr(existing_state, '_from_single_view') or not existing_state._from_single_view):
+                # Backup multi-view data before overwriting
+                if not hasattr(self, 'multi_view_data_backup'):
+                    self.multi_view_data_backup = {}
+                self.multi_view_data_backup[display_symbol] = existing_state
+                print(f"[CSV LOAD] Backed up multi-view data for {display_symbol} before overwriting with CSV")
+            
+            # Mark CSV data as from single view so it persists
+            state._from_single_view = True
+        else:
+            # In multi-view, preserve single-view data if it exists
+            existing_state = self.ticker_data.get(display_symbol)
+            if existing_state and hasattr(existing_state, '_from_single_view') and existing_state._from_single_view:
+                # Don't overwrite single-view data with CSV data when in multi-view
+                print(f"[CSV LOAD] Preserving single-view data for {display_symbol}, skipping CSV overwrite in multi-view")
+                return
+            # Mark CSV data as multi-view data
+            state._from_single_view = False
+        
+        self.ticker_data[display_symbol] = state
+        
+        # Update backup if loading in single view
+        if is_single_view and hasattr(self, 'single_view_data_backup'):
+            self.single_view_data_backup[display_symbol] = state
         
         if is_single_view:
             # Single view mode - update the existing single view UI
             if hasattr(self, 'single_view_symbol'):
-                # Get the tree widget first - it's shared across all single view symbols
-                tree = None
+                # Get the sheet widget first - it's shared across all single view symbols
+                sheet = None
                 cols = None
                 
-                # Look for any single view entry to get the tree widget
+                # Look for any single view entry to get the sheet widget
                 single_view_ui = None
                 for existing_symbol, existing_ui in self.ticker_tabs.items():
                     if existing_ui.get("_is_single_view") or "ticker_var" in existing_ui:
                         single_view_ui = existing_ui
-                        tree = existing_ui.get("tree")
+                        sheet = existing_ui.get("sheet")
                         cols = existing_ui.get("cols")
                         break
                 
-                # If still not found, get tree from single view structure
-                if not tree and hasattr(self, 'single_view') and self.single_view:
-                    from tkinter import ttk
-                    def find_tree_recursive(widget):
+                # If still not found, get sheet from single view structure
+                if not sheet and hasattr(self, 'single_view') and self.single_view:
+                    from tksheet import Sheet
+                    def find_sheet_recursive(widget):
                         try:
                             for child in widget.winfo_children():
-                                if isinstance(child, ttk.Treeview):
-                                    return child, child['columns']
+                                if isinstance(child, Sheet):
+                                    return child, child.headers()
                                 if hasattr(child, 'winfo_children'):
-                                    result = find_tree_recursive(child)
+                                    result = find_sheet_recursive(child)
                                     if result and result[0]:
                                         return result
                         except:
                             pass
                         return None, None
                     
-                    tree, cols = find_tree_recursive(self.single_view)
+                    sheet, _ = find_sheet_recursive(self.single_view)
+                    # Get cols from the UI entry if available
+                    if single_view_ui:
+                        cols = single_view_ui.get("cols")
                 
                 # Update the single view symbol to the CSV symbol
-                old_symbol = self.single_view_symbol
-                self.single_view_symbol = display_symbol
+                # Use the base symbol (without "(CSV)") for single_view_symbol to avoid issues
+                # But keep display_symbol for display purposes
+                old_symbol = self.single_view_symbol if hasattr(self, 'single_view_symbol') else None
+                # Extract base symbol from display_symbol (remove " (CSV)" if present)
+                base_symbol = display_symbol.replace(" (CSV)", "")
+                self.single_view_symbol = base_symbol
                 
-                # Update ticker_tabs entry
-                if old_symbol in self.ticker_tabs:
-                    old_ui = self.ticker_tabs[old_symbol]
-                    # Only move if it's a single view entry
-                    if old_ui.get("_is_single_view") or "ticker_var" in old_ui:
-                        # Get tree from old entry if we don't have it yet
-                        if not tree and old_ui.get("tree"):
-                            tree = old_ui.get("tree")
-                            cols = old_ui.get("cols")
-                        # Update it with new symbol key, preserving single view components
-                        self.ticker_tabs[display_symbol] = old_ui
-                        if old_symbol != display_symbol:
-                            del self.ticker_tabs[old_symbol]
-                        ui = self.ticker_tabs[display_symbol]
-                        # Ensure tree is set
-                        if tree:
-                            ui["tree"] = tree
-                            ui["cols"] = cols
-                    else:
-                        # Old entry is from multi-view, create new single view entry
-                        ui = {
-                            "tab": None,
-                            "price_var": self.single_view_price_var,
-                            "exp_var": self.single_view_exp_var,
-                            "exp_dropdown": self.single_view_exp_dropdown,
-                            "tree": tree,
-                            "cols": cols,
-                            "ticker_var": self.single_view_ticker_var,
-                            "ticker_label": self.single_view_ticker_label if hasattr(self, 'single_view_ticker_label') else None,
-                            "_is_single_view": True
-                        }
-                        self.ticker_tabs[display_symbol] = ui
+                # Use the proper single view key format: "_single_{symbol}"
+                # Use base_symbol for the key to avoid issues with "(CSV)" in keys
+                single_view_key = f"_single_{base_symbol}"
+                old_single_key = f"_single_{old_symbol}" if old_symbol else None
+                
+                # Update ticker_tabs entry with proper single view key format
+                if old_single_key and old_single_key in self.ticker_tabs:
+                    old_ui = self.ticker_tabs[old_single_key]
+                    # Get sheet from old entry if we don't have it yet
+                    if not sheet and old_ui.get("sheet"):
+                        sheet = old_ui.get("sheet")
+                        cols = old_ui.get("cols")
+                    # Update it with new symbol key, preserving single view components
+                    self.ticker_tabs[single_view_key] = old_ui
+                    if old_single_key != single_view_key:
+                        del self.ticker_tabs[old_single_key]
+                    ui = self.ticker_tabs[single_view_key]
+                    # Ensure sheet is set
+                    if sheet:
+                        ui["sheet"] = sheet
+                        ui["cols"] = cols
                 else:
-                    # No old entry, create new single view entry
+                    # No old entry, create new single view entry with proper key format
                     ui = {
                         "tab": None,
                         "price_var": self.single_view_price_var,
                         "exp_var": self.single_view_exp_var,
                         "exp_dropdown": self.single_view_exp_dropdown,
-                        "tree": tree,
+                        "sheet": sheet,
                         "cols": cols,
+                        "headers": single_view_ui.get("headers") if single_view_ui else None,
                         "ticker_var": self.single_view_ticker_var,
                         "ticker_label": self.single_view_ticker_label if hasattr(self, 'single_view_ticker_label') else None,
                         "_is_single_view": True
                     }
-                    self.ticker_tabs[display_symbol] = ui
+                    self.ticker_tabs[single_view_key] = ui
                 
                 # Update ticker input var (but not display until CSV loads successfully)
                 if hasattr(self, 'single_view_ticker_var'):
                     self.single_view_ticker_var.set(display_symbol)
                 # Display will be updated after CSV loads successfully below
                 
-                # Ensure we have the ui reference
-                ui = self.ticker_tabs[display_symbol]
+                # Ensure we have the ui reference (use single_view_key, not display_symbol)
+                if single_view_key not in self.ticker_tabs:
+                    # If for some reason the entry wasn't created, create it now
+                    ui = {
+                        "tab": None,
+                        "price_var": self.single_view_price_var,
+                        "exp_var": self.single_view_exp_var,
+                        "exp_dropdown": self.single_view_exp_dropdown,
+                        "sheet": sheet,
+                        "cols": cols,
+                        "headers": single_view_ui.get("headers") if single_view_ui else None,
+                        "ticker_var": self.single_view_ticker_var,
+                        "ticker_label": self.single_view_ticker_label if hasattr(self, 'single_view_ticker_label') else None,
+                        "_is_single_view": True
+                    }
+                    self.ticker_tabs[single_view_key] = ui
+                else:
+                    ui = self.ticker_tabs[single_view_key]
             else:
                 dialogs.error("CSV Error", "Single view not properly initialized.")
                 return
@@ -515,7 +630,24 @@ def load_csv_index_data(self):
         
         if expirations:
             ui["exp_var"].set(expirations[0])
-            self.update_table_for_symbol(display_symbol, expirations[0])
+            # For single view, update the table directly since we have the UI and state
+            # For multi view, use update_table_for_symbol
+            if is_single_view:
+                # Update table directly for single view
+                sheet = ui.get("sheet")
+                cols = ui.get("cols")
+                if sheet and cols and state.exp_data_map:
+                    df = state.exp_data_map.get(expirations[0])
+                    if df is not None and not df.empty:
+                        # Convert DataFrame to list of lists for tksheet
+                        data = []
+                        for _, row in df.iterrows():
+                            data.append([str(row.get(c, "")) for c in cols])
+                        sheet.set_sheet_data(data)
+                    else:
+                        sheet.set_sheet_data([])
+            else:
+                self.update_table_for_symbol(display_symbol, expirations[0])
 
         # Update ticker display label only after successful CSV load (single view)
         if is_single_view:

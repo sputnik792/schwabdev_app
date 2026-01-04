@@ -1,6 +1,7 @@
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk
+from tksheet import Sheet
 from style.theme import *
 from style.ttk_styles import apply_ttk_styles
 from style.theme_controller import set_theme_from_switch, is_light_mode, current_icon
@@ -482,8 +483,15 @@ def show_multi_view(self):
     # This ensures data persists when switching back from single view
     # IMPORTANT: Only use data that was NOT fetched in single view
     for symbol in self.preset_tickers:
-        if symbol in self.ticker_data and symbol in self.ticker_tabs:
+        # Check backup first (multi-view data that was preserved when single-view overwrote it)
+        state = None
+        if hasattr(self, 'multi_view_data_backup') and symbol in self.multi_view_data_backup:
+            state = self.multi_view_data_backup[symbol]
+        # Then check ticker_data
+        elif symbol in self.ticker_data:
             state = self.ticker_data[symbol]
+        
+        if state and symbol in self.ticker_tabs:
             ui = self.ticker_tabs[symbol]
             
             # Skip if this data was fetched in single view (has _from_single_view flag)
@@ -818,19 +826,20 @@ def show_single_view(self):
             "Put Bid","Put Ask","Δ(Put)","Θ(Put)","Γ(Put)","IV(Put)","OI(Put)"
         ]
         
-        tree = ttk.Treeview(table_wrap, columns=cols, show="headings")
-        
-        for c, h in zip(cols, headers):
-            tree.heading(c, text=h)
-            tree.column(c, width=110, anchor="center")
-        vsb = ttk.Scrollbar(table_wrap, orient="vertical", command=tree.yview)
-        hsb = ttk.Scrollbar(table_wrap, orient="horizontal", command=tree.xview)
-        
-        tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
-        
-        vsb.pack(side="right", fill="y")
-        hsb.pack(side="bottom", fill="x")
-        tree.pack(fill="both", expand=True)
+        # Create tksheet instead of Treeview
+        sheet = Sheet(
+            table_wrap,
+            data=[],  # Start with empty data
+            headers=headers,
+            show_row_index=False,
+            show_top_left=False,
+            empty_horizontal=0,
+            empty_vertical=0
+        )
+        # Set larger font size for better readability
+        sheet.font(newfont=("Segoe UI", 12, "normal"))
+        sheet.enable_bindings("all")
+        sheet.pack(fill="both", expand=True)
         
         # Store in ticker_tabs dict so it works with existing update mechanisms
         # Use a special key for single view to avoid conflicts with multi-view entries
@@ -852,8 +861,9 @@ def show_single_view(self):
             "price_var": price_var,
             "exp_var": exp_var,
             "exp_dropdown": exp_dropdown,
-            "tree": tree,
+            "sheet": sheet,
             "cols": cols,
+            "headers": headers,
             "ticker_var": ticker_var,
             "ticker_label": ticker_label,
             "_is_single_view": True  # Marker to identify single view entries
@@ -917,18 +927,40 @@ def show_single_view(self):
                 self.single_view_exp_var.set("")
             if hasattr(self, 'single_view_exp_dropdown'):
                 self.single_view_exp_dropdown.configure(values=[])
-            # Clear the table if tree exists
-            if ui and ui.get("tree"):
-                ui["tree"].delete(*ui["tree"].get_children())
+            # Clear the table if sheet exists
+            if ui and ui.get("sheet"):
+                ui["sheet"].set_sheet_data([])
             return
         
         # Restore single view data if it was previously fetched
         # Check if we have cached data for this symbol that was fetched in single view
-        print(f"[SINGLE VIEW LOAD] Checking if {symbol} is in ticker_data")
+        # First check backup, then check ticker_data
+        # Also check for CSV data which might be stored with " (CSV)" suffix
+        state = None
+        print(f"[SINGLE VIEW LOAD] Checking if {symbol} is in ticker_data or backup")
         print(f"[SINGLE VIEW LOAD] ticker_data keys: {list(self.ticker_data.keys())}")
-        if symbol in self.ticker_data:
-            state = self.ticker_data[symbol]
-            print(f"[SINGLE VIEW LOAD] Found state for {symbol}")
+        print(f"[SINGLE VIEW LOAD] backup keys: {list(self.single_view_data_backup.keys()) if hasattr(self, 'single_view_data_backup') else 'N/A'}")
+        
+        # Check backup first (single-view data that was preserved when multi-view overwrote it)
+        # Check both base symbol and with "(CSV)" suffix for CSV data
+        if hasattr(self, 'single_view_data_backup'):
+            if symbol in self.single_view_data_backup:
+                state = self.single_view_data_backup[symbol]
+                print(f"[SINGLE VIEW LOAD] Found state in backup for {symbol}")
+            elif f"{symbol} (CSV)" in self.single_view_data_backup:
+                state = self.single_view_data_backup[f"{symbol} (CSV)"]
+                print(f"[SINGLE VIEW LOAD] Found CSV state in backup for {symbol} (CSV)")
+        
+        # Then check ticker_data (check both base symbol and with "(CSV)" suffix)
+        if not state:
+            if symbol in self.ticker_data:
+                state = self.ticker_data[symbol]
+                print(f"[SINGLE VIEW LOAD] Found state in ticker_data for {symbol}")
+            elif f"{symbol} (CSV)" in self.ticker_data:
+                state = self.ticker_data[f"{symbol} (CSV)"]
+                print(f"[SINGLE VIEW LOAD] Found CSV state in ticker_data for {symbol} (CSV)")
+        
+        if state:
             print(f"[SINGLE VIEW LOAD] State has _from_single_view attr: {hasattr(state, '_from_single_view')}")
             if hasattr(state, '_from_single_view'):
                 print(f"[SINGLE VIEW LOAD] _from_single_view value: {state._from_single_view}")
@@ -945,14 +977,22 @@ def show_single_view(self):
                         ui["price_var"].set(f"${state.price:.2f}")
                 
                 # Restore ticker display label
+                # Use display_symbol if this is CSV data, otherwise use base symbol
+                display_symbol_to_show = symbol
+                if hasattr(state, 'is_csv') and state.is_csv:
+                    # For CSV data, check if we have the display_symbol version
+                    csv_display_symbol = f"{symbol} (CSV)"
+                    if csv_display_symbol in self.ticker_data or (hasattr(self, 'single_view_data_backup') and csv_display_symbol in self.single_view_data_backup):
+                        display_symbol_to_show = csv_display_symbol
+                
                 if hasattr(self, 'single_view_ticker_display_var'):
-                    self.single_view_ticker_display_var.set(symbol)
+                    self.single_view_ticker_display_var.set(display_symbol_to_show)
                 if hasattr(self, 'single_view_ticker_label'):
-                    self.single_view_ticker_label.configure(text=symbol)
+                    self.single_view_ticker_label.configure(text=display_symbol_to_show)
                 
                 # Restore ticker input field
                 if hasattr(self, 'single_view_ticker_var'):
-                    self.single_view_ticker_var.set(symbol)
+                    self.single_view_ticker_var.set(display_symbol_to_show)
                 
                 # Get expirations for showing/hiding N/A message and enabling button
                 expirations = list(state.exp_data_map.keys()) if state.exp_data_map else []
@@ -1004,20 +1044,20 @@ def show_single_view(self):
                         if hasattr(self, 'single_view_exp_var'):
                             selected_exp = self.single_view_exp_var.get()
                         
-                        # Update the table directly using the single view tree
-                        tree = ui.get("tree")
-                        if tree:
-                            tree.delete(*tree.get_children())
+                        # Update the table directly using the single view sheet
+                        sheet = ui.get("sheet")
+                        if sheet:
                             cols = ui.get("cols")
                             if cols:
                                 df = state.exp_data_map.get(selected_exp)
                                 if df is not None and not df.empty:
+                                    # Convert DataFrame to list of lists for tksheet
+                                    data = []
                                     for _, row in df.iterrows():
-                                        tree.insert(
-                                            "",
-                                            tk.END,
-                                            values=[row.get(c, "") for c in cols]
-                                        )
+                                        data.append([str(row.get(c, "")) for c in cols])
+                                    sheet.set_sheet_data(data)
+                                else:
+                                    sheet.set_sheet_data([])
                         
                         # Button state already set above based on expirations
                 
@@ -1039,8 +1079,8 @@ def show_single_view(self):
         if hasattr(self, 'single_view_exp_dropdown'):
             self.single_view_exp_dropdown.configure(values=[])
         # Clear the table
-        if ui.get("tree"):
-            ui["tree"].delete(*ui["tree"].get_children())
+        if ui.get("sheet"):
+            ui["sheet"].set_sheet_data([])
         
         # (Code below is unreachable but kept for reference)
         if symbol in self.ticker_data and ui.get("price_var") == self.single_view_price_var:

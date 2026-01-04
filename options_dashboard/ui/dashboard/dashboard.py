@@ -34,6 +34,8 @@ class Dashboard(ctk.CTkFrame):
         self.preset_tickers = self.load_preset_tickers()
         self.ticker_tabs = {}
         self.ticker_data = {}
+        self.single_view_data_backup = {}  # Backup for single-view data when multi-view overwrites it
+        self.multi_view_data_backup = {}  # Backup for multi-view data when single-view overwrites it
         # Tracking for fetch completion
         self.fetching_symbols = set()
         self.completed_symbols = set()
