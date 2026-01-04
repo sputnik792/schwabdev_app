@@ -5,6 +5,43 @@ from style.theme import *
 from style.theme import get_fonts
 import customtkinter as ctk
 
+def reapply_highlighting_for_symbol(dashboard, symbol):
+    """
+    Re-apply highlighting for a symbol when price changes
+    Works for both single-view and multi-view
+    """
+    state = dashboard.ticker_data.get(symbol)
+    if not state or not state.exp_data_map:
+        return
+    
+    # Try multi-view first
+    ui = dashboard.ticker_tabs.get(symbol)
+    if ui and not ui.get("_is_single_view"):
+        sheet = ui.get("sheet")
+        cols = ui.get("cols")
+        exp_var = ui.get("exp_var")
+        if sheet and cols and exp_var:
+            expiration = exp_var.get()
+            if expiration and expiration in state.exp_data_map:
+                df = state.exp_data_map.get(expiration)
+                if df is not None and not df.empty:
+                    highlight_rows_by_strike(sheet, df, cols, state.price)
+        return
+    
+    # Try single-view
+    single_key = f"_single_{symbol}"
+    ui = dashboard.ticker_tabs.get(single_key)
+    if ui and ui.get("_is_single_view"):
+        sheet = ui.get("sheet")
+        cols = ui.get("cols")
+        exp_var = ui.get("exp_var")
+        if sheet and cols and exp_var:
+            expiration = exp_var.get()
+            if expiration and expiration in state.exp_data_map:
+                df = state.exp_data_map.get(expiration)
+                if df is not None and not df.empty:
+                    highlight_rows_by_strike(sheet, df, cols, state.price)
+
 def highlight_rows_by_strike(sheet, df, cols, stock_price):
     """
     Highlight rows in the sheet based on strike price vs stock price
@@ -21,8 +58,28 @@ def highlight_rows_by_strike(sheet, df, cols, stock_price):
         # Strike column not found, skip highlighting
         return
     
-    # Get number of columns
+    # Get number of columns and rows
     num_cols = len(cols)
+    num_rows = len(df)
+    
+    # First, clear all highlights by setting bg to None/default for all option columns
+    # This ensures old highlights are removed before applying new ones
+    # We need to clear both call and put columns
+    try:
+        for row_idx in range(num_rows):
+            for col_idx, col_name in enumerate(cols):
+                # Only clear highlights on call/put columns (not Strike column)
+                if "call" in col_name.lower() or "put" in col_name.lower():
+                    try:
+                        # Try to clear highlight by setting bg to None or empty
+                        # If tksheet doesn't support this, new highlights will overwrite
+                        sheet.highlight_cells(row=row_idx, column=col_idx, bg="")
+                    except:
+                        # If clearing doesn't work, we'll just overwrite with new highlights
+                        pass
+    except:
+        # If clearing doesn't work, proceed - new highlights should overwrite old ones
+        pass
     
     # Iterate through rows and highlight based on strike price
     for row_idx, (_, row) in enumerate(df.iterrows()):

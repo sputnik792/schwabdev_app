@@ -2,6 +2,7 @@ import threading
 from ui import dialogs
 from data.schwab_api import fetch_stock_price, fetch_option_chain
 from state.app_state import get_state_value
+from ui.dashboard.tabs import reapply_highlighting_for_symbol
 
 def start_auto_refresh(self):
     auto_refresh_price(self)
@@ -42,6 +43,8 @@ def auto_refresh_price(self):
 
                     state.price = price
                     ui["price_var"].set(f"${price:.2f}")
+                    # Re-apply highlighting with new price
+                    reapply_highlighting_for_symbol(self, sym)
 
                 self.root.after(0, update)
 
@@ -170,6 +173,8 @@ def manual_refresh_all_tickers(dashboard):
                                         dashboard.single_view_price_var.set(f"${price:.2f}")
                                     if ui.get("price_var"):
                                         ui["price_var"].set(f"${price:.2f}")
+                            # Re-apply highlighting with new price
+                            reapply_highlighting_for_symbol(dashboard, symbol)
                     dashboard.root.after(0, update_price)
                     refreshed_count += 1
             except:
