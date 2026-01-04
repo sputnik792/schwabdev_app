@@ -146,10 +146,6 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
     if not symbol:
         dialogs.warning("Invalid Ticker", "Please enter a ticker symbol.")
         return
-    
-    # Record ticker search in history
-    from data.ticker_history import record_ticker_search
-    record_ticker_search(symbol)
 
     def worker():
         try:
@@ -315,6 +311,10 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                             dashboard.generate_chart_button.configure(state="normal")
                         else:
                             dashboard.generate_chart_button.configure(state="disabled")
+                    
+                    # Record ticker search in history only on successful fetch
+                    from data.ticker_history import record_ticker_search
+                    record_ticker_search(symbol)
                     
                     # Show completion message for 2 seconds
                     dialogs.show_timed_message(

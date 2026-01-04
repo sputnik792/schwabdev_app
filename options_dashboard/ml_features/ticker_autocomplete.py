@@ -257,10 +257,6 @@ class TickerAutocomplete:
         self.entry.insert(0, ticker)
         self._hide_suggestions()
         
-        # Record the ticker search in history
-        from data.ticker_history import record_ticker_search
-        record_ticker_search(ticker)
-        
         # Call callback if provided
         if self.on_selection:
             self.on_selection(ticker)
