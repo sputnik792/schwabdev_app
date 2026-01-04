@@ -44,8 +44,7 @@ def build_layout(self):
             elif option == "Auto Refresh":
                 show_auto_refresh_settings(self)
             elif option == "Color Theme":
-                # TODO: Implement color theme selector
-                pass
+                show_color_theme_settings(self)
             elif option == "About":
                 # TODO: Implement about dialog
                 pass
@@ -236,6 +235,143 @@ def show_auto_refresh_settings(dashboard):
     )
     info_text.pack(pady=20, padx=20)
 
+def show_color_theme_settings(dashboard):
+    """Show color theme settings window"""
+    from style.theme import get_fonts
+    fonts = get_fonts()
+    
+    # Store reference on root window (persists across dashboard rebuilds)
+    root = dashboard.root
+    
+    # If window already exists, bring it to front
+    if hasattr(root, '_color_theme_settings_window'):
+        try:
+            window = root._color_theme_settings_window
+            if window.winfo_exists():
+                window.lift()
+                window.focus()
+                return
+        except:
+            pass
+    
+    settings_window = ctk.CTkToplevel(root)
+    settings_window.title("Color Theme Settings")
+    settings_window.geometry("400x300")
+    settings_window.transient(root)
+    settings_window.grab_set()
+    
+    # Store reference to window on root (persists across dashboard rebuilds)
+    root._color_theme_settings_window = settings_window
+    
+    # Position near the menu button
+    settings_window.geometry("+%d+%d" % (root.winfo_x() + 50, root.winfo_y() + 80))
+    
+    def cleanup_window():
+        """Clean up window reference when window is destroyed"""
+        if hasattr(root, '_color_theme_settings_window'):
+            delattr(root, '_color_theme_settings_window')
+    
+    # Bind to window close event
+    settings_window.protocol("WM_DELETE_WINDOW", lambda: [cleanup_window(), settings_window.destroy()])
+    
+    # Back button in top left
+    back_frame = ctk.CTkFrame(settings_window, fg_color="transparent")
+    back_frame.pack(fill="x", padx=10, pady=10)
+    
+    def go_back():
+        cleanup_window()
+        settings_window.destroy()
+        # Recreate the options menu by calling show_options_menu from build_layout
+        # We need to access the function from the dashboard instance
+        if hasattr(dashboard, 'show_options_menu'):
+            dashboard.show_options_menu()
+    
+    back_button = ctk.CTkButton(
+        back_frame,
+        text="← Back",
+        command=go_back,
+        width=80,
+        height=30,
+        anchor="w"
+    )
+    back_button.pack(side="left")
+    
+    # Main content frame
+    content_frame = ctk.CTkFrame(settings_window)
+    content_frame.pack(fill="both", expand=True, padx=20, pady=20)
+    
+    # Color Theme label
+    theme_label = ctk.CTkLabel(
+        content_frame,
+        text="Color Theme:",
+        font=ctk.CTkFont(size=16, weight="bold")
+    )
+    theme_label.pack(pady=(20, 10))
+    
+    themes = list_available_themes()
+    
+    # Load theme from state or current theme, default to first available
+    saved_theme = get_state_value("color_theme")
+    current_theme = get_current_theme() or saved_theme
+    theme_value = current_theme or (themes[0] if themes else "")
+    
+    color_theme_var = ctk.StringVar(value=theme_value)
+    
+    def recreate_window():
+        """Recreate the window with new theme"""
+        try:
+            if settings_window.winfo_exists():
+                # Save current position
+                x = settings_window.winfo_x()
+                y = settings_window.winfo_y()
+                # Destroy old window
+                cleanup_window()
+                settings_window.destroy()
+                # Recreate window - need to get new dashboard reference
+                # Since dashboard was rebuilt, get it from root
+                for child in root.winfo_children():
+                    if isinstance(child, ctk.CTkFrame):
+                        # Find dashboard instance by checking for client attribute
+                        if hasattr(child, 'client'):
+                            # This is the dashboard
+                            show_color_theme_settings(child)
+                            # Try to restore position
+                            try:
+                                new_window = root._color_theme_settings_window
+                                if new_window.winfo_exists():
+                                    new_window.geometry("+%d+%d" % (x, y))
+                            except:
+                                pass
+                            break
+        except:
+            pass
+    
+    def on_theme_change(theme_name: str):
+        if theme_name:
+            # Save current position before theme change
+            x = settings_window.winfo_x()
+            y = settings_window.winfo_y()
+            
+            # Set the state first
+            set_state_value("color_theme", theme_name)
+            
+            # Set the theme - this triggers dashboard rebuild
+            set_color_theme(theme_name)
+            
+            # Recreate window immediately with minimal delay (1ms)
+            # This ensures the window updates as quickly as possible
+            root.after(1, recreate_window)
+    
+    theme_dropdown = ctk.CTkOptionMenu(
+        content_frame,
+        values=themes,
+        variable=color_theme_var,
+        command=on_theme_change,
+        width=300
+    )
+    
+    theme_dropdown.pack(pady=20)
+
 def update_refresh_button_visibility(dashboard):
     """Update visibility of Refresh Tickers button based on mode"""
     mode = get_state_value("ticker_refresh_mode", "auto")
@@ -313,38 +449,8 @@ def build_sidebar(self):
 
     ctk.CTkFrame(self.sidebar, height=1).pack(fill="x", pady=5)
     # ----------------------------------
-    # Color Theme Selector
+    # Color Theme Selector removed - now in Color Theme Settings window
     # ----------------------------------
-
-    ctk.CTkLabel(
-        self.sidebar,
-        text="Color Theme",
-        font=fonts["md"]
-    ).pack(pady=(10, 5))
-
-    themes = list_available_themes()
-
-    # Load theme from state or current theme, default to first available
-    saved_theme = get_state_value("color_theme")
-    current_theme = get_current_theme() or saved_theme
-    theme_value = current_theme or (themes[0] if themes else "")
-    
-    self.color_theme_var = ctk.StringVar(value=theme_value)
-
-    def on_theme_change(theme_name: str):
-        if theme_name:
-            set_color_theme(theme_name)
-            set_state_value("color_theme", theme_name)
-
-    theme_dropdown = ctk.CTkOptionMenu(
-        self.sidebar,
-        values=themes,
-        variable=self.color_theme_var,
-        command=on_theme_change,
-        width=160
-    )
-
-    theme_dropdown.pack(pady=(0, 12))
 
     ctk.CTkFrame(self.sidebar, height=1).pack(fill="x", pady=5)
 
