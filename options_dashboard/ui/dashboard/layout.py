@@ -18,11 +18,59 @@ def build_layout(self):
     top = ctk.CTkFrame(self, height=56)
     top.pack(fill="x", padx=12, pady=10)
 
-    ctk.CTkLabel(
+    # Options Dashboard menu
+    def show_options_menu():
+        # Create menu window
+        menu_window = ctk.CTkToplevel(self.root)
+        menu_window.title("Options Dashboard")
+        menu_window.geometry("200x200")
+        menu_window.transient(self.root)
+        menu_window.grab_set()
+        
+        # Position near the menu button
+        menu_window.geometry("+%d+%d" % (self.root.winfo_x() + 50, self.root.winfo_y() + 80))
+        
+        menu_frame = ctk.CTkFrame(menu_window)
+        menu_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        def menu_item_clicked(option):
+            menu_window.destroy()
+            if option == "Save Images":
+                # TODO: Implement save images
+                pass
+            elif option == "Auto Refresh":
+                # TODO: Implement auto refresh toggle
+                pass
+            elif option == "Color Theme":
+                # TODO: Implement color theme selector
+                pass
+            elif option == "About":
+                # TODO: Implement about dialog
+                pass
+        
+        menu_options = ["Save Images", "Auto Refresh", "Color Theme", "About"]
+        for option in menu_options:
+            btn = ctk.CTkButton(
+                menu_frame,
+                text=option,
+                command=lambda opt=option: menu_item_clicked(opt),
+                width=180,
+                height=35,
+                anchor="w"
+            )
+            btn.pack(fill="x", pady=5)
+    
+    menu_button = ctk.CTkButton(
         top,
-        text="Options Dashboard",
-        font=fonts["lg"]
-    ).pack(side="left", padx=12)
+        text="Options Dashboard ▼",
+        font=fonts["lg"],
+        command=show_options_menu,
+        width=180,
+        height=30,
+        fg_color="transparent",
+        hover_color=ACCENT_PRIMARY if not is_light_mode() else "#e5e7eb"
+    )
+    menu_button.pack(side="left", padx=12)
 
     # View mode toggle - load from app_state
     saved_view_mode = get_state_value("view_mode", "multi")
@@ -677,13 +725,20 @@ def show_single_view(self):
     # Only show data that was explicitly fetched in single view
     # When switching to single view, clear it unless it has its own data
     # Single view entries use the key format "_single_{symbol}"
+    print(f"[SINGLE VIEW LOAD] Starting show_single_view")
+    print(f"[SINGLE VIEW LOAD] Has single_view_symbol: {hasattr(self, 'single_view_symbol')}")
     if hasattr(self, 'single_view_symbol'):
         symbol = self.single_view_symbol
+        print(f"[SINGLE VIEW LOAD] Current single_view_symbol: {symbol}")
         single_view_key = f"_single_{symbol}"
+        print(f"[SINGLE VIEW LOAD] Looking for UI entry with key: {single_view_key}")
         ui = self.ticker_tabs.get(single_view_key)
+        print(f"[SINGLE VIEW LOAD] Found UI entry: {ui is not None}")
+        print(f"[SINGLE VIEW LOAD] All ticker_tabs keys: {list(self.ticker_tabs.keys())}")
         
         # If no single view entry exists, just clear the display
         if not ui:
+            print(f"[SINGLE VIEW LOAD] No UI entry found, clearing display")
             if hasattr(self, 'single_view_ticker_display_var'):
                 self.single_view_ticker_display_var.set("")
             if hasattr(self, 'single_view_price_var'):
@@ -713,12 +768,100 @@ def show_single_view(self):
                 ui["tree"].delete(*ui["tree"].get_children())
             return
         
-        # Single view should NOT auto-populate from ticker_data
-        # Only show data that was explicitly fetched in single view
-        # When switching to single view, clear it unless it has its own fetched data
-        # We'll track this by checking if single_view_symbol matches and if data was fetched via single view
-        # For now, just clear single view when switching to it - user must fetch data explicitly
-        # Clear the display to ensure independence
+        # Restore single view data if it was previously fetched
+        # Check if we have cached data for this symbol that was fetched in single view
+        print(f"[SINGLE VIEW LOAD] Checking if {symbol} is in ticker_data")
+        print(f"[SINGLE VIEW LOAD] ticker_data keys: {list(self.ticker_data.keys())}")
+        if symbol in self.ticker_data:
+            state = self.ticker_data[symbol]
+            print(f"[SINGLE VIEW LOAD] Found state for {symbol}")
+            print(f"[SINGLE VIEW LOAD] State has _from_single_view attr: {hasattr(state, '_from_single_view')}")
+            if hasattr(state, '_from_single_view'):
+                print(f"[SINGLE VIEW LOAD] _from_single_view value: {state._from_single_view}")
+            
+            # Only restore if this data was fetched in single view (has _from_single_view flag)
+            if hasattr(state, '_from_single_view') and state._from_single_view:
+                print(f"[SINGLE VIEW LOAD] ✓ Data was fetched in single view, restoring...")
+                print(f"[SINGLE VIEW LOAD] Price: {state.price}, Expirations: {list(state.exp_data_map.keys()) if state.exp_data_map else []}")
+                # Restore price display
+                if state.price > 0:
+                    if hasattr(self, 'single_view_price_var'):
+                        self.single_view_price_var.set(f"${state.price:.2f}")
+                    if ui.get("price_var"):
+                        ui["price_var"].set(f"${state.price:.2f}")
+                
+                # Restore ticker display label
+                if hasattr(self, 'single_view_ticker_display_var'):
+                    self.single_view_ticker_display_var.set(symbol)
+                if hasattr(self, 'single_view_ticker_label'):
+                    self.single_view_ticker_label.configure(text=symbol)
+                
+                # Restore ticker input field
+                if hasattr(self, 'single_view_ticker_var'):
+                    self.single_view_ticker_var.set(symbol)
+                
+                # Restore expiration dropdown and table if data exists
+                if state.exp_data_map:
+                    expirations = list(state.exp_data_map.keys())
+                    if expirations:
+                        # Sort expirations
+                        expirations.sort()
+                        if hasattr(self, 'single_view_exp_dropdown'):
+                            self.single_view_exp_dropdown.configure(values=expirations)
+                        if ui.get("exp_dropdown"):
+                            ui["exp_dropdown"].configure(values=expirations)
+                        
+                        # Set expiration (use existing if available, otherwise first)
+                        current_exp = None
+                        if hasattr(self, 'single_view_exp_var'):
+                            current_exp = self.single_view_exp_var.get()
+                        elif ui.get("exp_var"):
+                            current_exp = ui["exp_var"].get()
+                        
+                        if current_exp and current_exp in expirations:
+                            if hasattr(self, 'single_view_exp_var'):
+                                self.single_view_exp_var.set(current_exp)
+                            if ui.get("exp_var"):
+                                ui["exp_var"].set(current_exp)
+                        else:
+                            if hasattr(self, 'single_view_exp_var'):
+                                self.single_view_exp_var.set(expirations[0])
+                            if ui.get("exp_var"):
+                                ui["exp_var"].set(expirations[0])
+                        
+                        # Restore table with cached data
+                        selected_exp = expirations[0] if not current_exp or current_exp not in expirations else current_exp
+                        if hasattr(self, 'single_view_exp_var'):
+                            selected_exp = self.single_view_exp_var.get()
+                        
+                        # Update the table directly using the single view tree
+                        tree = ui.get("tree")
+                        if tree:
+                            tree.delete(*tree.get_children())
+                            cols = ui.get("cols")
+                            if cols:
+                                df = state.exp_data_map.get(selected_exp)
+                                if df is not None and not df.empty:
+                                    for _, row in df.iterrows():
+                                        tree.insert(
+                                            "",
+                                            tk.END,
+                                            values=[row.get(c, "") for c in cols]
+                                        )
+                        
+                        # Enable Generate Chart button since we have data
+                        if hasattr(self, 'generate_chart_button'):
+                            self.generate_chart_button.configure(state="normal")
+                
+                print(f"[SINGLE VIEW LOAD] ✓ Successfully restored all data for {symbol}")
+                return
+            else:
+                print(f"[SINGLE VIEW LOAD] ✗ Data exists but _from_single_view is False or missing")
+        else:
+            print(f"[SINGLE VIEW LOAD] ✗ Symbol {symbol} not found in ticker_data")
+        
+        # If no cached single-view data found, clear the display
+        print(f"[SINGLE VIEW LOAD] Clearing display - no valid cached data found")
         if hasattr(self, 'single_view_ticker_display_var'):
             self.single_view_ticker_display_var.set("")
         if hasattr(self, 'single_view_price_var'):
@@ -730,11 +873,6 @@ def show_single_view(self):
         # Clear the table
         if ui.get("tree"):
             ui["tree"].delete(*ui["tree"].get_children())
-        
-        # Only repopulate if this symbol was explicitly fetched in single view
-        # We can't perfectly track this, so we'll just not auto-populate
-        # The user must fetch data explicitly in single view
-        return
         
         # (Code below is unreachable but kept for reference)
         if symbol in self.ticker_data and ui.get("price_var") == self.single_view_price_var:

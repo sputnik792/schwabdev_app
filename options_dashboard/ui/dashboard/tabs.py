@@ -8,7 +8,18 @@ def rebuild_tabs(self):
     for tab in self.notebook.tabs():
         self.notebook.forget(tab)
 
+    # Preserve single view entries when rebuilding tabs
+    # Single view entries use keys starting with "_single_" or "_SINGLE_VIEW_PLACEHOLDER"
+    single_view_entries = {}
+    for key, value in self.ticker_tabs.items():
+        if key.startswith("_single_") or key == "_SINGLE_VIEW_PLACEHOLDER":
+            single_view_entries[key] = value
+    
     self.ticker_tabs.clear()
+    
+    # Restore single view entries
+    self.ticker_tabs.update(single_view_entries)
+    
     for symbol in self.preset_tickers:
         create_stock_tab(self, symbol)
 

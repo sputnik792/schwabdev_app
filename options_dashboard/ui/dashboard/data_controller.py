@@ -164,6 +164,19 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                 # This prevents multi-view from using this data
                 state._from_single_view = True
                 dashboard.ticker_data[symbol] = state
+                print(f"[SINGLE VIEW SAVE] ========== SAVING DATA ==========")
+                print(f"[SINGLE VIEW SAVE] Symbol: {symbol}")
+                print(f"[SINGLE VIEW SAVE] Set _from_single_view = True on state object")
+                print(f"[SINGLE VIEW SAVE] Stored in ticker_data[{symbol}]")
+                print(f"[SINGLE VIEW SAVE] Verifying flag after save: hasattr={hasattr(state, '_from_single_view')}, value={getattr(state, '_from_single_view', 'NOT SET')}")
+                print(f"[SINGLE VIEW SAVE] Price: {state.price}")
+                print(f"[SINGLE VIEW SAVE] Expirations: {list(state.exp_data_map.keys()) if state.exp_data_map else 'None'}")
+                print(f"[SINGLE VIEW SAVE] All ticker_data keys: {list(dashboard.ticker_data.keys())}")
+                # Verify the stored state also has the flag
+                stored_state = dashboard.ticker_data.get(symbol)
+                if stored_state:
+                    print(f"[SINGLE VIEW SAVE] Stored state has flag: hasattr={hasattr(stored_state, '_from_single_view')}, value={getattr(stored_state, '_from_single_view', 'NOT SET')}")
+                print(f"[SINGLE VIEW SAVE] ==================================")
                 
                 # Update ticker input (but not display until fetch succeeds)
                 ticker_var.set(symbol)
@@ -260,6 +273,9 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                     
                     # Update single_view_symbol reference
                     dashboard.single_view_symbol = symbol
+                    print(f"[SINGLE VIEW SAVE] Set single_view_symbol to: {symbol}")
+                    print(f"[SINGLE VIEW SAVE] Created ticker_tabs entry with key: {single_view_key}")
+                    print(f"[SINGLE VIEW SAVE] ticker_tabs keys: {list(dashboard.ticker_tabs.keys())}")
                     
                     # Update ticker display label only after successful fetch
                     if hasattr(dashboard, 'single_view_ticker_display_var'):
