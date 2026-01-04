@@ -583,8 +583,23 @@ def show_single_view(self):
         # Ticker label (will be updated when ticker changes)
         # Use a separate variable for display that starts empty
         ticker_display_var = tk.StringVar(value="")
-        ticker_label = ctk.CTkLabel(card, textvariable=ticker_display_var, font=fonts["lg"])
-        ticker_label.pack(anchor="w", padx=16, pady=(12, 0))
+        
+        # Create a frame for ticker label and options N/A message
+        ticker_row = ctk.CTkFrame(card, fg_color="transparent")
+        ticker_row.pack(anchor="w", padx=16, pady=(12, 0), fill="x")
+        
+        ticker_label = ctk.CTkLabel(ticker_row, textvariable=ticker_display_var, font=fonts["lg"])
+        ticker_label.pack(side="left")
+        
+        # Options N/A message (hidden by default, shown when no options data)
+        options_na_label = ctk.CTkLabel(
+            ticker_row,
+            text="(Options N/A from API)",
+            font=fonts["sm"],
+            text_color=TEXT_MUTED
+        )
+        options_na_label.pack(side="left", padx=(8, 0))
+        options_na_label.pack_forget()  # Hide by default
         
         ctk.CTkLabel(
             card,
@@ -852,6 +867,7 @@ def show_single_view(self):
         self.single_view_exp_var = exp_var
         self.single_view_exp_dropdown = exp_dropdown
         self.single_view_ticker_label = ticker_label
+        self.single_view_options_na_label = options_na_label  # Store reference to N/A label
     
     # Show single view
     self.single_view.pack(fill="both", expand=True)
@@ -882,6 +898,9 @@ def show_single_view(self):
                 self.single_view_exp_var.set("")
             if hasattr(self, 'single_view_exp_dropdown'):
                 self.single_view_exp_dropdown.configure(values=[])
+            # Hide "Options N/A" message when clearing
+            if hasattr(self, 'single_view_options_na_label'):
+                self.single_view_options_na_label.pack_forget()
             return
         
         # Verify this is a single view entry (has _is_single_view marker or ticker_var)
@@ -935,9 +954,25 @@ def show_single_view(self):
                 if hasattr(self, 'single_view_ticker_var'):
                     self.single_view_ticker_var.set(symbol)
                 
+                # Get expirations for showing/hiding N/A message and enabling button
+                expirations = list(state.exp_data_map.keys()) if state.exp_data_map else []
+                
+                # Show/hide "Options N/A" message based on whether expirations exist
+                if hasattr(self, 'single_view_options_na_label'):
+                    if not expirations or len(expirations) == 0:
+                        self.single_view_options_na_label.pack(side="left", padx=(8, 0))
+                    else:
+                        self.single_view_options_na_label.pack_forget()
+                
+                # Enable/disable Generate Chart button based on whether options exist
+                if hasattr(self, 'generate_chart_button'):
+                    if expirations and len(expirations) > 0:
+                        self.generate_chart_button.configure(state="normal")
+                    else:
+                        self.generate_chart_button.configure(state="disabled")
+                
                 # Restore expiration dropdown and table if data exists
                 if state.exp_data_map:
-                    expirations = list(state.exp_data_map.keys())
                     if expirations:
                         # Sort expirations
                         expirations.sort()
@@ -984,9 +1019,7 @@ def show_single_view(self):
                                             values=[row.get(c, "") for c in cols]
                                         )
                         
-                        # Enable Generate Chart button since we have data
-                        if hasattr(self, 'generate_chart_button'):
-                            self.generate_chart_button.configure(state="normal")
+                        # Button state already set above based on expirations
                 
                 print(f"[SINGLE VIEW LOAD] ✓ Successfully restored all data for {symbol}")
                 return
@@ -1047,9 +1080,12 @@ def show_single_view(self):
                     # Repopulate table with cached data
                     self.update_table_for_symbol(symbol, ui["exp_var"].get())
                     
-                    # Enable Generate Chart button since we have data
+                    # Enable Generate Chart button only if options data exists
                     if hasattr(self, 'generate_chart_button'):
-                        self.generate_chart_button.configure(state="normal")
+                        if expirations and len(expirations) > 0:
+                            self.generate_chart_button.configure(state="normal")
+                        else:
+                            self.generate_chart_button.configure(state="disabled")
 
 def toggle_view_mode(self):
     """Toggle between single and multi view - called by switch"""

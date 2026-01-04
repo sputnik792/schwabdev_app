@@ -178,17 +178,14 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                     print(f"[SINGLE VIEW SAVE] Stored state has flag: hasattr={hasattr(stored_state, '_from_single_view')}, value={getattr(stored_state, '_from_single_view', 'NOT SET')}")
                 print(f"[SINGLE VIEW SAVE] ==================================")
                 
-                # Update ticker input (but not display until fetch succeeds)
-                ticker_var.set(symbol)
-                # Don't update display label here - it will be updated after successful fetch
-                
-                # Update price - ONLY update single view's price_var
-                price_var.set(f"${price:.2f}" if price else "—")
-                
-                # Update expiration dropdown - ONLY update single view's components
-                if expirations:
-                    exp_dropdown.configure(values=expirations)
-                    exp_var.set(expirations[0])
+                try:
+                    # Update ticker input (but not display until fetch succeeds)
+                    ticker_var.set(symbol)
+                    # Don't update display label here - it will be updated after successful fetch
+                    
+                    # Update price - ONLY update single view's price_var
+                    price_var.set(f"${price:.2f}" if price else "—")
+                    print(f"[SINGLE VIEW SAVE] Updated price_var")
                     
                     # Get the single view UI components - these are independent from multi-view
                     # First, try to get tree from stored single view components
@@ -242,6 +239,7 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                     
                     # Always create/update single view entry under the special key
                     # This NEVER overwrites multi-view entries
+                    # IMPORTANT: Do this even if there are no expirations, so single_view_symbol gets updated
                     dashboard.ticker_tabs[single_view_key] = {
                         "tab": single_view_ui.get("tab") if single_view_ui else None,
                         "price_var": price_var,
@@ -255,29 +253,47 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                         "_symbol": symbol  # Store the actual symbol for reference
                     }
                     
-                    # Update table - ONLY update single view entry's tree directly
-                    # The multi-view entry (if it exists) is completely untouched
-                    if tree and state.exp_data_map:
-                        # Clear and repopulate the single view table directly
-                        tree.delete(*tree.get_children())
-                        if cols:
-                            df = state.exp_data_map.get(expirations[0])
-                            if df is not None and not df.empty:
-                                import tkinter as tk
-                                for _, row in df.iterrows():
-                                    tree.insert(
-                                        "",
-                                        tk.END,
-                                        values=[row.get(c, "") for c in cols]
-                                    )
-                    
-                    # Update single_view_symbol reference
+                    # Update single_view_symbol reference - ALWAYS do this, even if no expirations
                     dashboard.single_view_symbol = symbol
                     print(f"[SINGLE VIEW SAVE] Set single_view_symbol to: {symbol}")
                     print(f"[SINGLE VIEW SAVE] Created ticker_tabs entry with key: {single_view_key}")
                     print(f"[SINGLE VIEW SAVE] ticker_tabs keys: {list(dashboard.ticker_tabs.keys())}")
                     
+                    # Update expiration dropdown - ONLY update single view's components
+                    if expirations:
+                        # Hide "Options N/A" message if it exists
+                        if hasattr(dashboard, 'single_view_options_na_label'):
+                            dashboard.single_view_options_na_label.pack_forget()
+                        
+                        exp_dropdown.configure(values=expirations)
+                        exp_var.set(expirations[0])
+                        
+                        # Update table - ONLY update single view entry's tree directly
+                        # The multi-view entry (if it exists) is completely untouched
+                        if tree and state.exp_data_map:
+                            # Clear and repopulate the single view table directly
+                            tree.delete(*tree.get_children())
+                            if cols:
+                                df = state.exp_data_map.get(expirations[0])
+                                if df is not None and not df.empty:
+                                    import tkinter as tk
+                                    for _, row in df.iterrows():
+                                        tree.insert(
+                                            "",
+                                            tk.END,
+                                            values=[row.get(c, "") for c in cols]
+                                        )
+                    else:
+                        # No expirations - show "Options N/A" message and clear dropdown/table
+                        if hasattr(dashboard, 'single_view_options_na_label'):
+                            dashboard.single_view_options_na_label.pack(side="left", padx=(8, 0))
+                        
+                        exp_dropdown.configure(values=[])
+                        if tree:
+                            tree.delete(*tree.get_children())
+                    
                     # Update ticker display label only after successful fetch
+                    # Do this for ALL tickers, even those without options
                     if hasattr(dashboard, 'single_view_ticker_display_var'):
                         dashboard.single_view_ticker_display_var.set(symbol)
                     if hasattr(dashboard, 'single_view_ticker_label'):
@@ -289,9 +305,12 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                     if hasattr(dashboard, 'single_view_autocomplete_container'):
                         dashboard.single_view_autocomplete_container.pack_forget()
                     
-                    # Enable Generate Chart button if it exists
+                    # Enable Generate Chart button only if options data exists
                     if hasattr(dashboard, 'generate_chart_button'):
-                        dashboard.generate_chart_button.configure(state="normal")
+                        if expirations and len(expirations) > 0:
+                            dashboard.generate_chart_button.configure(state="normal")
+                        else:
+                            dashboard.generate_chart_button.configure(state="disabled")
                     
                     # Show completion message for 2 seconds
                     dialogs.show_timed_message(
@@ -300,6 +319,16 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                         f"Successfully fetched options data for {symbol}",
                         duration_ms=2000
                     )
+                except Exception as e:
+                    print(f"[SINGLE VIEW SAVE] ERROR in update(): {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # Still try to set single_view_symbol even on error
+                    try:
+                        dashboard.single_view_symbol = symbol
+                        print(f"[SINGLE VIEW SAVE] Set single_view_symbol to: {symbol} (after error)")
+                    except:
+                        pass
 
             dashboard.root.after(0, update)
 
@@ -472,6 +501,14 @@ def load_csv_index_data(self):
         ui["price_var"].set(f"${spot:.2f}")
 
         ui["exp_dropdown"].configure(values=expirations)
+        
+        # Show/hide "Options N/A" message based on whether expirations exist (single view)
+        if is_single_view and hasattr(self, 'single_view_options_na_label'):
+            if not expirations or len(expirations) == 0:
+                self.single_view_options_na_label.pack(side="left", padx=(8, 0))
+            else:
+                self.single_view_options_na_label.pack_forget()
+        
         if expirations:
             ui["exp_var"].set(expirations[0])
             self.update_table_for_symbol(display_symbol, expirations[0])
@@ -489,9 +526,12 @@ def load_csv_index_data(self):
             if hasattr(self, 'single_view_autocomplete_container'):
                 self.single_view_autocomplete_container.pack_forget()
             
-            # Enable Generate Chart button if it exists
+            # Enable Generate Chart button only if options data exists
             if hasattr(self, 'generate_chart_button'):
-                self.generate_chart_button.configure(state="normal")
+                if expirations and len(expirations) > 0:
+                    self.generate_chart_button.configure(state="normal")
+                else:
+                    self.generate_chart_button.configure(state="disabled")
 
         dialogs.info(
             "CSV Loaded",
