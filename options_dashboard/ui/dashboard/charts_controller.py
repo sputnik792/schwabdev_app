@@ -34,7 +34,9 @@ def generate_selected_chart(self, spot_override=None):
             return
         
         state = self.ticker_data[symbol]
-        ui = self.ticker_tabs.get(symbol)
+        # Single view entries use the key format "_single_{symbol}"
+        single_view_key = f"_single_{symbol}"
+        ui = self.ticker_tabs.get(single_view_key)
         if not ui:
             dialogs.warning("No Data", "Please fetch data first.")
             return
