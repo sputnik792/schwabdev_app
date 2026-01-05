@@ -948,9 +948,9 @@ def show_single_view(self):
             "Bid_Put","Ask_Put","Delta_Put","Theta_Put","Gamma_Put","IV_Put","OI_Put","Prob_ITM_Put"
         ]
         headers = [
-            "Call Bid","Call Ask","Δ(Call)","Θ(Call)","Γ(Call)","IV(Call)","OI(Call)","Prob ITM(Call)",
+            "Call Bid","Call Ask","Δ(Call)","Θ(Call)","Γ(Call)","IV(Call)","OI(Call)","% ITM (Call)",
             "Strike",
-            "Put Bid","Put Ask","Δ(Put)","Θ(Put)","Γ(Put)","IV(Put)","OI(Put)","Prob ITM(Put)"
+            "Put Bid","Put Ask","Δ(Put)","Θ(Put)","Γ(Put)","IV(Put)","OI(Put)","% ITM (Put)"
         ]
         
         # Create tksheet instead of Treeview
@@ -965,6 +965,8 @@ def show_single_view(self):
         )
         # Set larger font size for better readability
         sheet.font(newfont=("Segoe UI", 12, "normal"))
+        # Set default column width to make columns thinner
+        sheet.default_column_width(85)
         sheet.enable_bindings("all")
         # Disable editing to make table read-only
         sheet.disable_bindings("edit_cell", "edit_header", "edit_index")
