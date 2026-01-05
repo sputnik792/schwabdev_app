@@ -21,7 +21,9 @@ def generate_selected_chart(self, spot_override=None):
         self._chart_windows = []
     
     # Check if we're in single view mode
-    is_single_view = hasattr(self, 'single_view') and self.single_view.winfo_viewable()
+    is_single_view = (hasattr(self, 'single_view') and 
+                      self.single_view is not None and 
+                      self.single_view.winfo_viewable())
     
     if is_single_view:
         # Single view mode - use single_view_symbol
