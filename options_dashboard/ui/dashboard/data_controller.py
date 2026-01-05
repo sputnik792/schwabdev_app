@@ -61,6 +61,10 @@ def fetch_worker(self, symbol):
                 ui["exp_var"].set(expirations[0])
                 self.update_table_for_symbol(symbol, expirations[0])
             
+            # Enable stats breakdown button if it exists (any successful fetch enables it)
+            if hasattr(self, 'stats_breakdown_button'):
+                self.stats_breakdown_button.configure(state="normal")
+            
             # Mark this symbol as completed
             if hasattr(self, 'fetching_symbols') and hasattr(self, 'completed_symbols'):
                 self.completed_symbols.add(symbol)
@@ -415,6 +419,10 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                             dashboard.generate_chart_button.configure(state="normal")
                         else:
                             dashboard.generate_chart_button.configure(state="disabled")
+                    
+                    # Enable stats breakdown button if it exists (any successful fetch enables it)
+                    if hasattr(dashboard, 'stats_breakdown_button'):
+                        dashboard.stats_breakdown_button.configure(state="normal")
                     
                     # Record ticker search in history only on successful fetch
                     record_ticker_search(symbol)

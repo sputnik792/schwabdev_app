@@ -351,12 +351,18 @@ class Dashboard(ctk.CTkFrame):
 
     def open_stats(self):
         # Check if we're in single view mode
-        if hasattr(self, 'single_view') and self.single_view.winfo_viewable():
+        is_single_view = (hasattr(self, 'single_view') and 
+                          self.single_view is not None and 
+                          self.single_view.winfo_viewable())
+        
+        if is_single_view:
             # Single view mode - use single_view_symbol
-            if not hasattr(self, 'single_view_symbol'):
+            if not hasattr(self, 'single_view_symbol') or not self.single_view_symbol:
                 dialogs.warning("No Ticker", "Please enter and fetch a ticker symbol first.")
                 return
             symbol = self.single_view_symbol
+            # For single view, use the "_single_{symbol}" key format
+            ticker_tabs_key = f"_single_{symbol}"
         else:
             # Multi view mode - use notebook
             if not hasattr(self, 'notebook'):
@@ -364,15 +370,18 @@ class Dashboard(ctk.CTkFrame):
                 return
             tab_id = self.notebook.select()
             if not tab_id:
+                dialogs.warning("No Tab Selected", "Please select a tab.")
                 return
             symbol = self.notebook.tab(tab_id, "text")
+            # For multi view, use the symbol directly as the key
+            ticker_tabs_key = symbol
         
         state = self.ticker_data.get(symbol)
         if not state:
             dialogs.warning("No Data", "No data available for this ticker.")
             return
         
-        ui = self.ticker_tabs.get(symbol)
+        ui = self.ticker_tabs.get(ticker_tabs_key)
         if not ui:
             dialogs.warning("No Data", "No UI data available for this ticker.")
             return
