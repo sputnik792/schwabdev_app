@@ -3,6 +3,9 @@ from ui import dialogs
 from data.schwab_api import fetch_stock_price, fetch_option_chain
 from state.app_state import get_state_value
 from ui.dashboard.tabs import reapply_highlighting_for_symbol
+from models.greeks import calculate_prob_itm
+from utils.time import time_to_expiration
+from config import RISK_FREE_RATE
 
 def start_auto_refresh(self):
     auto_refresh_price(self)
@@ -85,6 +88,19 @@ def auto_refresh_options(self):
                 exp_map, expirations = fetch_option_chain(self.client, sym)
                 if not expirations:
                     return
+
+                # Get current price for Prob ITM calculation
+                state = self.ticker_data.get(sym)
+                if not state:
+                    return
+                price = state.price
+
+                # Calculate Prob ITM for each expiration
+                for exp_date in expirations:
+                    df = exp_map.get(exp_date)
+                    if df is not None and not df.empty:
+                        T = time_to_expiration(exp_date)
+                        exp_map[exp_date] = calculate_prob_itm(df, price, T, RISK_FREE_RATE)
 
                 def update():
                     state = self.ticker_data.get(sym)
@@ -184,6 +200,18 @@ def manual_refresh_all_tickers(dashboard):
             try:
                 exp_map, expirations = fetch_option_chain(dashboard.client, symbol)
                 if expirations:
+                    # Get current price for Prob ITM calculation
+                    state = dashboard.ticker_data.get(symbol)
+                    if state:
+                        price = state.price
+                        
+                        # Calculate Prob ITM for each expiration
+                        for exp_date in expirations:
+                            df = exp_map.get(exp_date)
+                            if df is not None and not df.empty:
+                                T = time_to_expiration(exp_date)
+                                exp_map[exp_date] = calculate_prob_itm(df, price, T, RISK_FREE_RATE)
+                    
                     def update_options():
                         state = dashboard.ticker_data.get(symbol)
                         if state:
