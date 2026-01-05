@@ -239,6 +239,9 @@ def generate_selected_chart(self, spot_override=None):
 
 
 def generate_chart_group(self):
+    from state.app_state import get_state_value
+    from utils.time import time_to_expiration
+    
     successful = 0
     skipped = 0
     failed = []
@@ -249,80 +252,112 @@ def generate_chart_group(self):
     # Set flag to prevent spot slider from triggering chart regeneration during group generation
     self._generating_chart_group = True
     
+    # Load group settings
+    group_settings = get_state_value("group_settings", {})
+    
     for symbol, ui in self.ticker_tabs.items():
         if symbol not in self.ticker_data:
             skipped += 1
             continue
         
-        # Get the expiration date selected in this ticker's UI
-        exp = ui["exp_var"].get()
-        if not exp:
-            skipped += 1
-            continue
+        # Get settings for this ticker (default to include=True, range="1 day")
+        ticker_settings = group_settings.get(symbol, {"include": True, "range": "1 day"})
         
-        # Create a unique key for this ticker/expiration pair
-        pair_key = (symbol, exp)
-        if pair_key in generated_pairs:
-            # Skip if we've already generated this pair
-            skipped += 1
-            continue
+        # Check if ticker is included (for now, always include since checkbox does nothing)
+        # if not ticker_settings.get("include", True):
+        #     skipped += 1
+        #     continue
         
-        # Check if expiration has data
-        state = self.ticker_data[symbol]
-        if exp not in state.exp_data_map or state.exp_data_map[exp].empty:
-            skipped += 1
-            continue
-        
-        # Try to generate chart
+        # Get range setting
+        range_str = ticker_settings.get("range", "1 day")
+        # Parse range (e.g., "2 days" -> 2)
         try:
-            # Select the tab for this ticker
-            self.notebook.select(ui["tab"])
-            
-            # Validate data using the same logic as generate_selected_chart
-            spot = state.price
-            if spot <= 0:
-                failed.append(f"{symbol} (invalid spot price)")
+            num_days = int(range_str.split()[0])
+        except:
+            num_days = 1
+        
+        # Get state and available expirations
+        state = self.ticker_data[symbol]
+        if not state or not state.exp_data_map:
+            skipped += 1
+            continue
+        
+        # Get sorted expiration dates
+        expirations = sorted(state.exp_data_map.keys())
+        if not expirations:
+            skipped += 1
+            continue
+        
+        # Limit to the number of days specified
+        expirations_to_use = expirations[:num_days]
+        
+        # Generate charts for each expiration in the range
+        for exp in expirations_to_use:
+            # Create a unique key for this ticker/expiration pair
+            pair_key = (symbol, exp)
+            if pair_key in generated_pairs:
+                # Skip if we've already generated this pair
                 continue
             
-            T = time_to_expiration(exp)
-            if T <= 0:
-                failed.append(f"{symbol} (invalid expiration)")
+            if exp not in state.exp_data_map or state.exp_data_map[exp].empty:
                 continue
             
-            df = state.exp_data_map[exp]
-            has_valid_data = False
-            for _, row in df.iterrows():
-                try:
-                    K = float(row.get("Strike", 0) or 0)
-                    if pd.isna(K) or K <= 0:
-                        continue
-                    for opt in ("CALL", "PUT"):
-                        # Column names are IV_Call, OI_Call, IV_Put, OI_Put (capital C/P)
-                        opt_key = opt.capitalize()  # "CALL" -> "Call", "PUT" -> "Put"
-                        iv_val = row.get(f"IV_{opt_key}", 0)
-                        oi_val = row.get(f"OI_{opt_key}", 0)
-                        # Handle NaN, None, or empty values
-                        iv = 0.0 if (pd.isna(iv_val) or iv_val == "" or iv_val is None) else float(iv_val)
-                        oi = 0.0 if (pd.isna(oi_val) or oi_val == "" or oi_val is None) else float(oi_val)
-                        if iv > 0 and oi > 0:
-                            has_valid_data = True
-                            break
-                    if has_valid_data:
-                        break
-                except (ValueError, TypeError):
+            # Try to generate chart
+            try:
+                # Select the tab for this ticker
+                self.notebook.select(ui["tab"])
+                
+                # Validate data using the same logic as generate_selected_chart
+                spot = state.price
+                if spot <= 0:
+                    failed.append(f"{symbol} (invalid spot price)")
                     continue
-            
-            if has_valid_data:
-                # Mark this pair as generated BEFORE calling generate_selected_chart
-                # to prevent infinite loops if the function triggers itself
-                generated_pairs.add(pair_key)
-                # Generate the chart
-                generate_selected_chart(self)
-                successful += 1
-            else:
-                failed.append(symbol)
-        except Exception as e:
-            failed.append(f"{symbol} (error: {str(e)})")
+                
+                T = time_to_expiration(exp)
+                if T <= 0:
+                    failed.append(f"{symbol} (invalid expiration)")
+                    continue
+                
+                df = state.exp_data_map[exp]
+                has_valid_data = False
+                for _, row in df.iterrows():
+                    try:
+                        K = float(row.get("Strike", 0) or 0)
+                        if pd.isna(K) or K <= 0:
+                            continue
+                        for opt in ("CALL", "PUT"):
+                            # Column names are IV_Call, OI_Call, IV_Put, OI_Put (capital C/P)
+                            opt_key = opt.capitalize()  # "CALL" -> "Call", "PUT" -> "Put"
+                            iv_val = row.get(f"IV_{opt_key}", 0)
+                            oi_val = row.get(f"OI_{opt_key}", 0)
+                            # Handle NaN, None, or empty values
+                            iv = 0.0 if (pd.isna(iv_val) or iv_val == "" or iv_val is None) else float(iv_val)
+                            oi = 0.0 if (pd.isna(oi_val) or oi_val == "" or oi_val is None) else float(oi_val)
+                            if iv > 0 and oi > 0:
+                                has_valid_data = True
+                                break
+                        if has_valid_data:
+                            break
+                    except (ValueError, TypeError):
+                        continue
+                
+                if has_valid_data:
+                    # Mark this pair as generated BEFORE calling generate_selected_chart
+                    # to prevent infinite loops if the function triggers itself
+                    generated_pairs.add(pair_key)
+                    # Temporarily set the expiration in the UI for this ticker
+                    original_exp = ui["exp_var"].get()
+                    ui["exp_var"].set(exp)
+                    # Generate the chart
+                    generate_selected_chart(self)
+                    # Restore original expiration
+                    ui["exp_var"].set(original_exp)
+                    successful += 1
+                else:
+                    if symbol not in [f.split()[0] if isinstance(f, str) and " " in f else f for f in failed]:
+                        failed.append(symbol)
+            except Exception as e:
+                failed.append(f"{symbol} (error: {str(e)})")
     
     # Show summary using timed message (non-modal, auto-closes)
     # Show it AFTER a brief delay to ensure chart windows are fully rendered

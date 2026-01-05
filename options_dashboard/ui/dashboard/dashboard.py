@@ -524,9 +524,184 @@ class Dashboard(ctk.CTkFrame):
 
     def open_group_settings(self):
         """Open the Group Settings window"""
-        # TODO: Implement Group Settings functionality
-        from ui import dialogs
-        dialogs.info("Group Settings", "Group Settings feature coming soon!")
+        from state.app_state import get_state_value, set_state_value
+        import tkinter as tk
+        import customtkinter as ctk
+        
+        # Load existing settings
+        group_settings = get_state_value("group_settings", {})
+        
+        # Create window
+        win = ctk.CTkToplevel(self.root)
+        win.title("Group Settings")
+        win.geometry("800x600")
+        win.resizable(True, True)
+        
+        # Center the window
+        win.update_idletasks()
+        screen_w = win.winfo_screenwidth()
+        screen_h = win.winfo_screenheight()
+        win_w = win.winfo_width()
+        win_h = win.winfo_height()
+        x = (screen_w // 2) - (win_w // 2)
+        y = (screen_h // 2) - (win_h // 2)
+        win.geometry(f"{win_w}x{win_h}+{x}+{y}")
+        
+        # Ensure window stays in front
+        win.lift()
+        win.focus()
+        win.attributes("-topmost", True)
+        win.after(100, lambda: win.attributes("-topmost", False))
+        
+        # Keep window in front when it receives focus or is shown
+        def keep_in_front(event=None):
+            win.lift()
+            win.focus()
+        
+        win.bind("<FocusIn>", keep_in_front)
+        win.bind("<Map>", keep_in_front)  # When window is shown
+        
+        # Main container with scrollbars
+        main_frame = ctk.CTkFrame(win)
+        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # Get background color for canvas (handle tuple for light/dark mode)
+        bg_color_tuple = main_frame.cget("fg_color")
+        # If it's a tuple, get the appropriate one based on current theme
+        if isinstance(bg_color_tuple, (tuple, list)) and len(bg_color_tuple) == 2:
+            from style.theme_controller import is_light_mode
+            bg_color = bg_color_tuple[0] if is_light_mode() else bg_color_tuple[1]
+        elif isinstance(bg_color_tuple, str):
+            bg_color = bg_color_tuple
+        else:
+            # Fallback to a default color
+            bg_color = "#1e1e1e" if ctk.get_appearance_mode() == "Dark" else "#f0f0f0"
+        
+        # Create scrollable frame
+        canvas = tk.Canvas(main_frame, bg=bg_color, highlightthickness=0)
+        scrollbar_v = tk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+        scrollbar_h = tk.Scrollbar(main_frame, orient="horizontal", command=canvas.xview)
+        scrollable_frame = ctk.CTkFrame(canvas)
+        
+        def update_scroll_region(e):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        
+        scrollable_frame.bind("<Configure>", update_scroll_region)
+        
+        canvas_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar_v.set)
+        canvas.configure(xscrollcommand=scrollbar_h.set)
+        
+        # Pack scrollbars and canvas
+        scrollbar_v.pack(side="right", fill="y")
+        scrollbar_h.pack(side="bottom", fill="x")
+        canvas.pack(side="left", fill="both", expand=True)
+        
+        # Update canvas window to fill canvas width
+        def update_canvas_window(e):
+            canvas_width = canvas.winfo_width()
+            if canvas_width > 1:  # Only update if canvas has been rendered
+                canvas.itemconfig(canvas_window, width=canvas_width)
+        
+        canvas.bind("<Configure>", update_canvas_window)
+        
+        # Get all tickers from preset_tickers
+        tickers = self.preset_tickers if hasattr(self, 'preset_tickers') else []
+        
+        # Create columns (12 tickers per column)
+        TICKERS_PER_COLUMN = 12
+        num_columns = max(1, (len(tickers) + TICKERS_PER_COLUMN - 1) // TICKERS_PER_COLUMN)
+        
+        # Store references to widgets
+        ticker_widgets = {}
+        
+        # Header row - create header for each column
+        header_frame = ctk.CTkFrame(scrollable_frame, fg_color="transparent")
+        header_frame.pack(fill="x", padx=10, pady=(10, 5))
+        
+        # Create column frames
+        column_frames = []
+        for col_idx in range(num_columns):
+            # Header column
+            header_col = ctk.CTkFrame(header_frame, fg_color="transparent")
+            header_col.pack(side="left", padx=10)
+            
+            ctk.CTkLabel(header_col, text="Ticker", font=ctk.CTkFont(weight="bold"), width=80).pack(side="left", padx=5)
+            ctk.CTkLabel(header_col, text="Include", font=ctk.CTkFont(weight="bold"), width=20).pack(side="left", padx=5)
+            ctk.CTkLabel(header_col, text="Range", font=ctk.CTkFont(weight="bold"), width=100).pack(side="left", padx=5)
+            
+            # Data column
+            col_frame = ctk.CTkFrame(scrollable_frame, fg_color="transparent")
+            col_frame.pack(side="left", fill="y", padx=10)
+            column_frames.append(col_frame)
+        
+        # Add tickers to columns
+        for idx, ticker in enumerate(tickers):
+            col_idx = idx // TICKERS_PER_COLUMN
+            col_frame = column_frames[col_idx]
+            
+            # Get saved settings for this ticker
+            ticker_settings = group_settings.get(ticker, {"include": True, "range": "1 day"})
+            
+            # Ticker row
+            row_frame = ctk.CTkFrame(col_frame, fg_color="transparent")
+            row_frame.pack(fill="x", pady=2)
+            
+            # Ticker label
+            ticker_label = ctk.CTkLabel(row_frame, text=ticker, width=80)
+            ticker_label.pack(side="left", padx=5)
+            
+            # Checkbox
+            include_var = tk.BooleanVar(value=ticker_settings.get("include", True))
+            include_checkbox = ctk.CTkCheckBox(row_frame, text="", variable=include_var, width=20)
+            include_checkbox.pack(side="left", padx=5)
+            
+            # Dropdown
+            range_options = ["1 day", "2 days", "3 days", "4 days", "5 days", "7 days", "10 days"]
+            range_var = tk.StringVar(value=ticker_settings.get("range", "1 day"))
+            range_dropdown = ctk.CTkOptionMenu(
+                row_frame,
+                variable=range_var,
+                values=range_options,
+                width=100
+            )
+            range_dropdown.pack(side="left", padx=5)
+            
+            # Store references
+            ticker_widgets[ticker] = {
+                "include_var": include_var,
+                "range_var": range_var
+            }
+        
+        # Save button
+        def save_settings():
+            # Keep window in front
+            win.lift()
+            win.focus()
+            
+            new_settings = {}
+            for ticker, widgets in ticker_widgets.items():
+                new_settings[ticker] = {
+                    "include": widgets["include_var"].get(),
+                    "range": widgets["range_var"].get()
+                }
+            set_state_value("group_settings", new_settings)
+            print(f"[GROUP SETTINGS] Saved settings: {new_settings}")  # Debug print
+            from ui import dialogs
+            dialogs.show_timed_message(win, "Settings Saved", "Group settings have been saved.", duration_ms=2000)
+            
+            # Keep window in front after dialog
+            win.after(50, lambda: win.lift())
+            win.after(100, lambda: win.focus())
+        
+        button_frame = ctk.CTkFrame(win, fg_color="transparent")
+        button_frame.pack(fill="x", padx=10, pady=10)
+        
+        save_btn = ctk.CTkButton(button_frame, text="Save Settings", command=save_settings, width=150)
+        save_btn.pack(side="left", padx=5)
+        
+        close_btn = ctk.CTkButton(button_frame, text="Close", command=win.destroy, width=150)
+        close_btn.pack(side="left", padx=5)
 
     def edit_api_credentials(self):
         """Open window to edit API credentials"""
