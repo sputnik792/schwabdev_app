@@ -433,6 +433,13 @@ def build_sidebar(self):
         state="disabled"  # Disabled until fetch completes
     )
     self.stats_breakdown_button.pack(fill="x", padx=10, pady=6)
+    
+    self.data_analysis_button = ctk.CTkButton(
+        self.sidebar,
+        text="Data Analysis Tools",
+        command=self.open_data_analysis_tools
+    )
+    self.data_analysis_button.pack(fill="x", padx=10, pady=6)
 
     # Exposure model
     default_model = get_state_value("exposure_model", "Gamma")

@@ -393,6 +393,91 @@ class Dashboard(ctk.CTkFrame):
 
         open_stats_modal(self.root, state, exp, symbol)
 
+    def open_data_analysis_tools(self):
+        """Open the Data Analysis Tools window"""
+        win = ctk.CTkToplevel(self.root)
+        win.title("Data Analysis Tools")
+        win.geometry("600x400")
+        win.resizable(False, False)
+        
+        # Center the window
+        win.update_idletasks()
+        screen_w = win.winfo_screenwidth()
+        screen_h = win.winfo_screenheight()
+        win_w = win.winfo_width()
+        win_h = win.winfo_height()
+        x = (screen_w // 2) - (win_w // 2)
+        y = (screen_h // 2) - (win_h // 2)
+        win.geometry(f"{win_w}x{win_h}+{x}+{y}")
+        
+        # Ensure window stays in front
+        win.lift()
+        win.focus()
+        win.attributes("-topmost", True)
+        win.after(100, lambda: win.attributes("-topmost", False))
+        
+        # Main container
+        main_frame = ctk.CTkFrame(win)
+        main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        # Title
+        title_label = ctk.CTkLabel(
+            main_frame,
+            text="Data Analysis Tools",
+            font=ctk.CTkFont(size=20, weight="bold")
+        )
+        title_label.pack(pady=(0, 20))
+        
+        # Three columns container
+        columns_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        columns_frame.pack(fill="both", expand=True)
+        
+        # Quantitative (Greeks) column
+        quantitative_frame = ctk.CTkFrame(columns_frame)
+        quantitative_frame.pack(side="left", fill="both", expand=True, padx=10)
+        
+        quantitative_label = ctk.CTkLabel(
+            quantitative_frame,
+            text="Quantitative (Greeks)",
+            font=ctk.CTkFont(size=14, weight="bold")
+        )
+        quantitative_label.pack(pady=(10, 10))
+        
+        def open_gamma_profile():
+            # TODO: Implement Gamma Profile functionality
+            from ui import dialogs
+            dialogs.info("Gamma Profile", "Gamma Profile feature coming soon!")
+        
+        gamma_profile_btn = ctk.CTkButton(
+            quantitative_frame,
+            text="Gamma Profile",
+            command=open_gamma_profile,
+            width=150
+        )
+        gamma_profile_btn.pack(pady=5)
+        
+        # Pricing column
+        pricing_frame = ctk.CTkFrame(columns_frame)
+        pricing_frame.pack(side="left", fill="both", expand=True, padx=10)
+        
+        pricing_label = ctk.CTkLabel(
+            pricing_frame,
+            text="Pricing",
+            font=ctk.CTkFont(size=14, weight="bold")
+        )
+        pricing_label.pack(pady=(10, 10))
+        
+        # Experimental column
+        experimental_frame = ctk.CTkFrame(columns_frame)
+        experimental_frame.pack(side="left", fill="both", expand=True, padx=10)
+        
+        experimental_label = ctk.CTkLabel(
+            experimental_frame,
+            text="Experimental",
+            font=ctk.CTkFont(size=14, weight="bold")
+        )
+        experimental_label.pack(pady=(10, 10))
+
     def edit_api_credentials(self):
         """Open window to edit API credentials"""
         from options_dashboard.config import APP_KEY, SECRET
