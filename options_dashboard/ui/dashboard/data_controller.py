@@ -1,14 +1,17 @@
 import threading
 import datetime
+from tkinter import filedialog
 
 from state.ticker_state import TickerState
 from data.schwab_api import fetch_stock_price, fetch_option_chain
 from data.csv_loader import load_csv_index
+from data.ticker_history import record_ticker_search
 from ui import dialogs
-from ui.dashboard.tabs import highlight_rows_by_strike
+from ui.dashboard.tabs import highlight_rows_by_strike, format_row_data
 from models.greeks import calculate_prob_itm
 from utils.time import time_to_expiration
 from config import RISK_FREE_RATE
+from tksheet import Sheet
 
 def fetch_worker(self, symbol):
     try:
@@ -267,7 +270,6 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                     
                     # If still not found, get sheet from single view structure
                     if not sheet and hasattr(dashboard, 'single_view') and dashboard.single_view:
-                        from tksheet import Sheet
                         def find_sheet_recursive(widget):
                             try:
                                 for child in widget.winfo_children():
@@ -371,7 +373,6 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                                 print(f"[SINGLE VIEW SAVE] df={df is not None and not df.empty if df is not None else False}, rows={len(df) if df is not None and not df.empty else 0}")
                                 if df is not None and not df.empty:
                                     # Convert DataFrame to list of lists for tksheet
-                                    from ui.dashboard.tabs import format_row_data
                                     data = []
                                     for _, row in df.iterrows():
                                         data.append(format_row_data(row, cols))
@@ -416,7 +417,6 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                             dashboard.generate_chart_button.configure(state="disabled")
                     
                     # Record ticker search in history only on successful fetch
-                    from data.ticker_history import record_ticker_search
                     record_ticker_search(symbol)
                     
                     # Show completion message for 2 seconds
@@ -476,7 +476,6 @@ def load_csv_index_data(self):
     if self.csv_mode_var.get() == "Default File":
         filename = f"{symbol.lower()}_quotedata.csv"
     else:
-        from tkinter import filedialog
         filename = filedialog.askopenfilename(
             title=f"Select {symbol} CSV File",
             filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")]
@@ -548,7 +547,6 @@ def load_csv_index_data(self):
                 
                 # If still not found, get sheet from single view structure
                 if not sheet and hasattr(self, 'single_view') and self.single_view:
-                    from tksheet import Sheet
                     def find_sheet_recursive(widget):
                         try:
                             for child in widget.winfo_children():
@@ -670,7 +668,7 @@ def load_csv_index_data(self):
                         # Convert DataFrame to list of lists for tksheet
                         data = []
                         for _, row in df.iterrows():
-                            data.append([str(row.get(c, "")) for c in cols])
+                            data.append(format_row_data(row, cols))
                         sheet.set_sheet_data(data)
                         # Highlight rows based on strike price vs stock price
                         highlight_rows_by_strike(sheet, df, cols, state.price)

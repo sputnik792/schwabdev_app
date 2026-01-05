@@ -21,6 +21,7 @@ from ui.dashboard.charts_controller import generate_selected_chart, generate_cha
 from style.custom_theme_controller import register_theme_change_callback
 from ui.dashboard.single_stock_panel import build_single_stock_panel
 from ui.dashboard.stats_modal import open_stats_modal
+from ui.dashboard.charts_controller import _bring_chart_windows_to_front
 
 
 class Dashboard(ctk.CTkFrame):
@@ -89,7 +90,6 @@ class Dashboard(ctk.CTkFrame):
 
         self.generate_selected_chart = generate_selected_chart.__get__(self)
         self.generate_chart_group = generate_chart_group.__get__(self)
-        from ui.dashboard.charts_controller import _bring_chart_windows_to_front
         self._bring_chart_windows_to_front = _bring_chart_windows_to_front.__get__(self)
         #---- end of binding controllers
 

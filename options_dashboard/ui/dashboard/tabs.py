@@ -2,7 +2,6 @@ import tkinter as tk
 from tkinter import ttk
 from tksheet import Sheet
 from style.theme import *
-from style.theme import get_fonts
 import customtkinter as ctk
 import pandas as pd
 

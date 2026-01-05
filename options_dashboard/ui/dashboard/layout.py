@@ -8,8 +8,12 @@ from style.theme_controller import set_theme_from_switch, is_light_mode, current
 from style.tooltip import ToolTip
 from style.custom_theme_controller import list_available_themes, set_color_theme, get_current_theme
 from state.app_state import get_state_value, set_state_value
-from ui.dashboard.tabs import highlight_rows_by_strike
-from ui.dashboard.tabs import highlight_rows_by_strike
+from ui import dialogs
+from ui.dashboard.tabs import highlight_rows_by_strike, create_stock_tab, format_row_data
+from ui.dashboard.data_controller import fetch_single_symbol_for_view
+from ui.dashboard.refresh import manual_refresh_all_tickers
+from ml_features.ticker_autocomplete import TickerAutocomplete
+from style.theme import get_fonts
 
 def build_layout(self):
     fonts = get_fonts()
@@ -138,7 +142,6 @@ def build_layout(self):
 
 def show_auto_refresh_settings(dashboard):
     """Show auto refresh settings window"""
-    from style.theme import get_fonts
     fonts = get_fonts()
     
     settings_window = ctk.CTkToplevel(dashboard.root)
@@ -237,7 +240,6 @@ def show_auto_refresh_settings(dashboard):
 
 def show_color_theme_settings(dashboard):
     """Show color theme settings window"""
-    from style.theme import get_fonts
     fonts = get_fonts()
     
     # Store reference on root window (persists across dashboard rebuilds)
@@ -385,7 +387,6 @@ def update_refresh_button_visibility(dashboard):
         if dashboard.refresh_tickers_button is None:
             def manual_refresh_all():
                 """Manually refresh all tickers that have been fetched"""
-                from ui.dashboard.refresh import manual_refresh_all_tickers
                 manual_refresh_all_tickers(dashboard)
             
             dashboard.refresh_tickers_button = ctk.CTkButton(
@@ -632,7 +633,6 @@ def show_multi_view(self):
                 # Recreate the multi-view entry for this symbol
                 if symbol in self.preset_tickers:
                     # Recreate the tab to get a fresh multi-view entry
-                    from ui.dashboard.tabs import create_stock_tab
                     create_stock_tab(self, symbol)
                     # Get the newly created entry
                     ui = self.ticker_tabs.get(symbol)
@@ -692,9 +692,6 @@ def show_single_view(self):
         apply_ttk_styles()
         
         # Create single ticker panel (similar to create_stock_tab but without notebook)
-        from ui.dashboard.tabs import create_stock_tab
-        from style.theme import get_fonts
-        
         fonts = get_fonts()
         
         # Use a default symbol - but don't use one that might have multi-view data
@@ -811,7 +808,6 @@ def show_single_view(self):
         # Don't pack initially - will be packed when suggestions appear
         
         # Initialize autocomplete feature
-        from ml_features.ticker_autocomplete import TickerAutocomplete
         
         def on_ticker_selected(ticker):
             # When a ticker is selected, hide suggestions
@@ -889,7 +885,6 @@ def show_single_view(self):
         def fetch_single_ticker_data():
             symbol = ticker_var.get().strip().upper()
             if not symbol:
-                from ui import dialogs
                 dialogs.warning("Invalid Ticker", "Please enter a ticker symbol.")
                 return
             
@@ -898,7 +893,6 @@ def show_single_view(self):
                 self.generate_chart_button.configure(state="disabled")
             
             # Fetch data for this ticker
-            from ui.dashboard.data_controller import fetch_single_symbol_for_view
             fetch_single_symbol_for_view(self, symbol, ticker_var, price_var, exp_var, exp_dropdown, ticker_label)
         
         fetch_button = ctk.CTkButton(
@@ -1209,7 +1203,6 @@ def show_single_view(self):
                                 df = state.exp_data_map.get(selected_exp)
                                 if df is not None and not df.empty:
                                     # Convert DataFrame to list of lists for tksheet
-                                    from ui.dashboard.tabs import format_row_data
                                     data = []
                                     for _, row in df.iterrows():
                                         data.append(format_row_data(row, cols))
