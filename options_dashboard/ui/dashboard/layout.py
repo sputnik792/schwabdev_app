@@ -426,21 +426,6 @@ def build_sidebar(self):
         width=160
     ).pack(pady=(0, 15))
 
-    self.stats_breakdown_button = ctk.CTkButton(
-        self.sidebar,
-        text="Stats Breakdown",
-        command=self.open_stats,
-        state="disabled"  # Disabled until fetch completes
-    )
-    self.stats_breakdown_button.pack(fill="x", padx=10, pady=6)
-    
-    self.data_analysis_button = ctk.CTkButton(
-        self.sidebar,
-        text="Data Analysis Tools",
-        command=self.open_data_analysis_tools
-    )
-    self.data_analysis_button.pack(fill="x", padx=10, pady=6)
-
     # Exposure model
     default_model = get_state_value("exposure_model", "Gamma")
     self.model_var = tk.StringVar(value=default_model)
@@ -456,6 +441,21 @@ def build_sidebar(self):
         command=on_model_change
     )
     model_button.pack(pady=(0, 15))
+
+    self.stats_breakdown_button = ctk.CTkButton(
+        self.sidebar,
+        text="Stats Breakdown",
+        command=self.open_stats,
+        state="disabled"  # Disabled until fetch completes
+    )
+    self.stats_breakdown_button.pack(fill="x", padx=10, pady=6)
+    
+    self.data_analysis_button = ctk.CTkButton(
+        self.sidebar,
+        text="Data Analysis Tools",
+        command=self.open_data_analysis_tools
+    )
+    self.data_analysis_button.pack(fill="x", padx=10, pady=6)
 
     ctk.CTkFrame(self.sidebar, height=1).pack(fill="x", pady=5)
     # ----------------------------------
