@@ -398,7 +398,7 @@ class Dashboard(ctk.CTkFrame):
         win = ctk.CTkToplevel(self.root)
         win.title("Data Analysis Tools")
         win.geometry("600x400")
-        win.resizable(False, False)
+        win.resizable(True, True)
         
         # Center the window
         win.update_idletasks()
@@ -410,15 +410,13 @@ class Dashboard(ctk.CTkFrame):
         y = (screen_h // 2) - (win_h // 2)
         win.geometry(f"{win_w}x{win_h}+{x}+{y}")
         
-        # Ensure window stays in front
-        win.lift()
-        win.focus()
-        win.attributes("-topmost", True)
-        win.after(100, lambda: win.attributes("-topmost", False))
+        # Create scrollable frame
+        scrollable_frame = ctk.CTkScrollableFrame(win)
+        scrollable_frame.pack(fill="both", expand=True, padx=20, pady=20)
         
         # Main container
-        main_frame = ctk.CTkFrame(win)
-        main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        main_frame = ctk.CTkFrame(scrollable_frame)
+        main_frame.pack(fill="both", expand=True)
         
         # Title
         title_label = ctk.CTkLabel(
@@ -512,20 +510,34 @@ class Dashboard(ctk.CTkFrame):
         pricing_label.pack(pady=(10, 10))
         
         # Pricing model buttons
+        def open_heston_model():
+            """Open Heston model window"""
+            from models.data_analysis.pricing_models.heston_ui import open_heston_window
+            open_heston_window(self)
+        
         def open_pricing_model(model_name):
-            """Placeholder function for pricing models"""
+            """Placeholder function for other pricing models"""
             from ui import dialogs
             dialogs.info("Coming Soon", f"{model_name} pricing model will be implemented soon.")
         
-        pricing_models = [
-            "Heston",
+        # Heston button
+        heston_btn = ctk.CTkButton(
+            pricing_frame,
+            text="Heston",
+            command=open_heston_model,
+            width=150
+        )
+        heston_btn.pack(pady=5)
+        
+        # Other pricing models (placeholders)
+        other_models = [
             "SABR",
             "Dupire",
             "Jump-Diff (Merton)",
             "Bachelier"
         ]
         
-        for model in pricing_models:
+        for model in other_models:
             btn = ctk.CTkButton(
                 pricing_frame,
                 text=model,
@@ -544,6 +556,14 @@ class Dashboard(ctk.CTkFrame):
             font=ctk.CTkFont(size=14, weight="bold")
         )
         experimental_label.pack(pady=(10, 10))
+        
+        # Ensure window stays in front after all widgets are packed
+        win.update_idletasks()
+        win.lift()
+        win.focus()
+        win.attributes("-topmost", True)
+        win.after(100, lambda: win.attributes("-topmost", False))
+        win.after(200, lambda: (win.lift(), win.focus()))
 
     def open_group_settings(self):
         """Open the Group Settings window"""
