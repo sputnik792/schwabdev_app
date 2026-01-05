@@ -642,7 +642,7 @@ class Dashboard(ctk.CTkFrame):
             
             ctk.CTkLabel(header_col, text="Ticker", font=ctk.CTkFont(weight="bold"), width=TICKER_WIDTH).pack(side="left", padx=ITEM_PADX)
             ctk.CTkLabel(header_col, text="Include", font=ctk.CTkFont(weight="bold"), width=INCLUDE_WIDTH).pack(side="left", padx=ITEM_PADX)
-            ctk.CTkLabel(header_col, text="Range", font=ctk.CTkFont(weight="bold"), width=RANGE_WIDTH).pack(side="left", padx=ITEM_PADX)
+            ctk.CTkLabel(header_col, text="Range", font=ctk.CTkFont(weight="bold"), width=RANGE_WIDTH).pack(side="left", padx=(ITEM_PADX * 2, ITEM_PADX))  # Extra left padding to match dropdown
             
             # Data column (for ticker rows)
             col_frame = ctk.CTkFrame(col_container, fg_color="transparent")
@@ -670,7 +670,7 @@ class Dashboard(ctk.CTkFrame):
             include_checkbox = ctk.CTkCheckBox(row_frame, text="", variable=include_var, width=INCLUDE_WIDTH)
             include_checkbox.pack(side="left", padx=ITEM_PADX)
             
-            # Dropdown (width matches header)
+            # Dropdown (width matches header, with extra padding to move it right)
             range_options = ["1 day", "2 days", "3 days", "4 days", "5 days", "7 days", "10 days"]
             range_var = tk.StringVar(value=ticker_settings.get("range", "1 day"))
             range_dropdown = ctk.CTkOptionMenu(
@@ -679,7 +679,7 @@ class Dashboard(ctk.CTkFrame):
                 values=range_options,
                 width=RANGE_WIDTH
             )
-            range_dropdown.pack(side="left", padx=ITEM_PADX)
+            range_dropdown.pack(side="left", padx=(ITEM_PADX * 2, ITEM_PADX))  # Extra left padding to move right
             
             # Store references
             ticker_widgets[ticker] = {
