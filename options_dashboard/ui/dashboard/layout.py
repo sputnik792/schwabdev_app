@@ -972,6 +972,8 @@ def show_single_view(self):
         # Set larger font size for better readability
         sheet.font(newfont=("Segoe UI", 12, "normal"))
         sheet.enable_bindings("all")
+        # Disable editing to make table read-only
+        sheet.disable_bindings("edit_cell", "edit_header", "edit_index")
         sheet.pack(fill="both", expand=True)
         
         # Store in ticker_tabs dict so it works with existing update mechanisms

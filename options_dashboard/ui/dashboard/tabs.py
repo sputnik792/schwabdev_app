@@ -220,6 +220,8 @@ def create_stock_tab(self, symbol):
     # Set larger font size for better readability
     sheet.font(newfont=("Segoe UI", 12, "normal"))
     sheet.enable_bindings("all")
+    # Disable editing to make table read-only
+    sheet.disable_bindings("edit_cell", "edit_header", "edit_index")
     sheet.pack(fill="both", expand=True)
 
     self.ticker_tabs[symbol] = {
