@@ -615,24 +615,38 @@ class Dashboard(ctk.CTkFrame):
         # Store references to widgets
         ticker_widgets = {}
         
-        # Header row - create header for each column
-        header_frame = ctk.CTkFrame(scrollable_frame, fg_color="transparent")
-        header_frame.pack(fill="x", padx=10, pady=(10, 5))
+        # Column width constants (must match between header and data)
+        TICKER_WIDTH = 80
+        INCLUDE_WIDTH = 20
+        RANGE_WIDTH = 100
+        COLUMN_PADX = 10
+        ITEM_PADX = 5
         
-        # Create column frames
+        # Total column width for alignment
+        COLUMN_TOTAL_WIDTH = TICKER_WIDTH + INCLUDE_WIDTH + RANGE_WIDTH + (ITEM_PADX * 6)  # 3 items * 2 padx each
+        
+        # Create columns container
+        columns_container = ctk.CTkFrame(scrollable_frame, fg_color="transparent")
+        columns_container.pack(fill="both", expand=True, padx=10, pady=(10, 5))
+        
+        # Create column frames (each column has both header and data)
         column_frames = []
         for col_idx in range(num_columns):
-            # Header column
-            header_col = ctk.CTkFrame(header_frame, fg_color="transparent")
-            header_col.pack(side="left", padx=10)
+            # Create a container for this column (header + data)
+            col_container = ctk.CTkFrame(columns_container, fg_color="transparent")
+            col_container.pack(side="left", fill="y", padx=COLUMN_PADX)
             
-            ctk.CTkLabel(header_col, text="Ticker", font=ctk.CTkFont(weight="bold"), width=80).pack(side="left", padx=5)
-            ctk.CTkLabel(header_col, text="Include", font=ctk.CTkFont(weight="bold"), width=20).pack(side="left", padx=5)
-            ctk.CTkLabel(header_col, text="Range", font=ctk.CTkFont(weight="bold"), width=100).pack(side="left", padx=5)
+            # Header for this column
+            header_col = ctk.CTkFrame(col_container, fg_color="transparent")
+            header_col.pack(fill="x", pady=(0, 5))
             
-            # Data column
-            col_frame = ctk.CTkFrame(scrollable_frame, fg_color="transparent")
-            col_frame.pack(side="left", fill="y", padx=10)
+            ctk.CTkLabel(header_col, text="Ticker", font=ctk.CTkFont(weight="bold"), width=TICKER_WIDTH).pack(side="left", padx=ITEM_PADX)
+            ctk.CTkLabel(header_col, text="Include", font=ctk.CTkFont(weight="bold"), width=INCLUDE_WIDTH).pack(side="left", padx=ITEM_PADX)
+            ctk.CTkLabel(header_col, text="Range", font=ctk.CTkFont(weight="bold"), width=RANGE_WIDTH).pack(side="left", padx=ITEM_PADX)
+            
+            # Data column (for ticker rows)
+            col_frame = ctk.CTkFrame(col_container, fg_color="transparent")
+            col_frame.pack(fill="both", expand=True)
             column_frames.append(col_frame)
         
         # Add tickers to columns
@@ -647,25 +661,25 @@ class Dashboard(ctk.CTkFrame):
             row_frame = ctk.CTkFrame(col_frame, fg_color="transparent")
             row_frame.pack(fill="x", pady=2)
             
-            # Ticker label
-            ticker_label = ctk.CTkLabel(row_frame, text=ticker, width=80)
-            ticker_label.pack(side="left", padx=5)
+            # Ticker label (width matches header)
+            ticker_label = ctk.CTkLabel(row_frame, text=ticker, width=TICKER_WIDTH)
+            ticker_label.pack(side="left", padx=ITEM_PADX)
             
-            # Checkbox
+            # Checkbox (width matches header)
             include_var = tk.BooleanVar(value=ticker_settings.get("include", True))
-            include_checkbox = ctk.CTkCheckBox(row_frame, text="", variable=include_var, width=20)
-            include_checkbox.pack(side="left", padx=5)
+            include_checkbox = ctk.CTkCheckBox(row_frame, text="", variable=include_var, width=INCLUDE_WIDTH)
+            include_checkbox.pack(side="left", padx=ITEM_PADX)
             
-            # Dropdown
+            # Dropdown (width matches header)
             range_options = ["1 day", "2 days", "3 days", "4 days", "5 days", "7 days", "10 days"]
             range_var = tk.StringVar(value=ticker_settings.get("range", "1 day"))
             range_dropdown = ctk.CTkOptionMenu(
                 row_frame,
                 variable=range_var,
                 values=range_options,
-                width=100
+                width=RANGE_WIDTH
             )
-            range_dropdown.pack(side="left", padx=5)
+            range_dropdown.pack(side="left", padx=ITEM_PADX)
             
             # Store references
             ticker_widgets[ticker] = {
@@ -688,11 +702,15 @@ class Dashboard(ctk.CTkFrame):
             set_state_value("group_settings", new_settings)
             print(f"[GROUP SETTINGS] Saved settings: {new_settings}")  # Debug print
             from ui import dialogs
-            dialogs.show_timed_message(win, "Settings Saved", "Group settings have been saved.", duration_ms=2000)
             
-            # Keep window in front after dialog
-            win.after(50, lambda: win.lift())
-            win.after(100, lambda: win.focus())
+            # Show timed message that stays in front (2.5 seconds)
+            dialog = dialogs.show_timed_message(win, "Settings Saved", "Group settings have been saved.", duration_ms=2500)
+            
+            # After dialog closes, bring Group Settings window back to front
+            def bring_back_to_front():
+                win.lift()
+                win.focus()
+            win.after(2600, bring_back_to_front)
         
         button_frame = ctk.CTkFrame(win, fg_color="transparent")
         button_frame.pack(fill="x", padx=10, pady=10)
