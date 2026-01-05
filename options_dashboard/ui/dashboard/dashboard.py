@@ -489,7 +489,7 @@ class Dashboard(ctk.CTkFrame):
                 dialogs.warning("No Expiration", "Please select an expiration date.")
                 return
             
-            from ui.dashboard.gamma_profile import generate_gamma_profile
+            from models.data_analysis.quantitative.gamma_profile import generate_gamma_profile
             generate_gamma_profile(self, symbol, state, exp)
         
         gamma_profile_btn = ctk.CTkButton(
