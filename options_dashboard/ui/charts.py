@@ -49,10 +49,9 @@ def generate_altair_chart(
         )
         .properties(
             title={
-                "text": [f"{symbol} {model_name} Exposure ({expiration})"],
+                "text": [f"{symbol} {model_name} Exposure ({expiration}) | {datetime.datetime.now().strftime('%I:%M %p')}"],
                 "subtitle": [
-                    f"Total {model_name}: {total_exposure:+.2f} Bn | "
-                    f"Updated {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                    f"Total {model_name}: {total_exposure:+.2f} Bn"
                 ],
             },
             width=850,
@@ -160,8 +159,9 @@ def embed_matplotlib_chart(
             label="Dealer Flip"
         )
 
+    current_time = datetime.datetime.now().strftime('%I:%M %p')
     ax.set_title(
-        f"{symbol} {model_name} Exposure ({expiration})",
+        f"{symbol} {model_name} Exposure ({expiration}) | {current_time}",
         fontsize=14
     )
     ax.set_xlabel("Strike Price", fontsize=12)

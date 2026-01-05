@@ -1,4 +1,5 @@
 import customtkinter as ctk
+import datetime
 import tkinter as tk
 import pandas as pd
 from ui import dialogs
@@ -165,7 +166,8 @@ def generate_selected_chart(self, spot_override=None):
         # Set meaningful title based on chart content
         exp_date = exp.split(":")[0]  # Get just the date part
         model_name = self.model_var.get()
-        win.title(f"{symbol} {model_name} Exposure - {exp_date}")
+        current_time = datetime.datetime.now().strftime('%I:%M %p')
+        win.title(f"{symbol} {model_name} Exposure - {exp_date} | {current_time}")
         
         # Initialize chart windows tracking if not exists
         if not hasattr(self, '_chart_windows'):
