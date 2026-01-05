@@ -23,7 +23,8 @@ def heston_prob(j, S, K, T, r, q, v0, kappa, theta, sigma, rho):
         num = np.exp(-i*u*np.log(K))*phi
         denom = i*u
         return real(num/denom)
-    integral = quad(lambda u: integrand(u), 0, 100)[0]
+    # Increase limit and use better integration settings
+    integral = quad(lambda u: integrand(u), 0, 100, limit=200, epsabs=1e-6, epsrel=1e-6)[0]
     return 0.5 + (1/pi)*integral
 
 def heston_call_price(S, K, T, r, q, v0, kappa, theta, sigma, rho):

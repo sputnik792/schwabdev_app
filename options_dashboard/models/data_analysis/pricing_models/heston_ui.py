@@ -6,7 +6,11 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
 
-from models.data_analysis.pricing_models.heston import heston_greeks
+from models.data_analysis.pricing_models.heston import heston_call_price
+from models.data_analysis.pricing_models.heston_simulation import (
+    simulate_heston_paths,
+    calculate_implied_volatility_smile
+)
 from utils.time import time_to_expiration
 from config import RISK_FREE_RATE, DIVIDEND_YIELD
 from ui import dialogs
@@ -187,153 +191,188 @@ def open_heston_window(dashboard):
     sigma_v_slider.configure(command=update_sigma_v_label)
     rho_slider.configure(command=update_rho_label)
     
-    # Greek selector
-    greek_label = ctk.CTkLabel(
+    # Days selector for simulation
+    days_label = ctk.CTkLabel(
         main_frame,
-        text="Select Greek:",
+        text="Simulation Period (Days):",
         font=ctk.CTkFont(weight="bold")
     )
-    greek_label.pack(pady=(20, 5))
+    days_label.pack(pady=(20, 5))
     
-    greek_var = ctk.StringVar(value="gamma")
-    greek_dropdown = ctk.CTkOptionMenu(
+    days_var = ctk.IntVar(value=30)
+    days_entry = ctk.CTkEntry(
         main_frame,
-        variable=greek_var,
-        values=["gamma", "vega", "vanna", "charm"],
-        width=200
+        textvariable=days_var,
+        width=150
     )
-    greek_dropdown.pack(pady=5)
+    days_entry.pack(pady=5)
+    
+    # Number of time steps
+    steps_label = ctk.CTkLabel(
+        main_frame,
+        text="Time Steps:",
+        font=ctk.CTkFont(weight="bold")
+    )
+    steps_label.pack(pady=(10, 5))
+    
+    steps_var = ctk.IntVar(value=100)
+    steps_entry = ctk.CTkEntry(
+        main_frame,
+        textvariable=steps_var,
+        width=150
+    )
+    steps_entry.pack(pady=5)
     
     # Generate button
     def generate_heston_chart():
-        """Generate Heston model chart"""
+        """Generate Heston model charts: volatility smile and dynamics"""
         try:
             # Get parameters
             kappa = kappa_var.get()
             theta = theta_var.get()
             sigma_v = sigma_v_var.get()
             rho = rho_var.get()
-            selected_greek = greek_var.get()
+            n_days = days_var.get()
+            n_steps = steps_var.get()
+            
+            if n_days <= 0 or n_steps <= 0:
+                dialogs.warning("Invalid Input", "Days and steps must be positive.")
+                return
             
             # Get market data
-            S = state.price
-            T = time_to_expiration(exp)
+            S0 = state.price
+            T_exp = time_to_expiration(exp)
             r = RISK_FREE_RATE
             q = DIVIDEND_YIELD
             
-            if S <= 0 or T <= 0:
+            if S0 <= 0 or T_exp <= 0:
                 dialogs.warning("Invalid Data", "Invalid spot price or expiration date.")
                 return
             
-            # Get options data
+            # Get initial variance from market IV
             df = state.exp_data_map[exp]
             if df is None or df.empty:
                 dialogs.warning("No Data", "No options data available for this expiration.")
                 return
             
-            # Calculate Heston Greeks for each strike
-            exposure_rows = []
-            
+            # Calculate average IV for initial variance
+            ivs = []
             for row in df.itertuples(index=False):
-                K = float(row.Strike) if hasattr(row, 'Strike') else 0
-                if K <= 0:
-                    continue
-                
-                # Use average IV or call IV as v0 (initial variance)
                 call_iv = float(getattr(row, 'IV_Call', 0) or 0)
                 put_iv = float(getattr(row, 'IV_Put', 0) or 0)
-                
-                # Convert IV from percentage to decimal if needed
                 if call_iv > 1:
                     call_iv /= 100.0
                 if put_iv > 1:
                     put_iv /= 100.0
-                
-                # Use average IV or whichever is available
-                if call_iv > 0 and put_iv > 0:
-                    v0 = ((call_iv**2 + put_iv**2) / 2.0)
-                elif call_iv > 0:
-                    v0 = call_iv**2
-                elif put_iv > 0:
-                    v0 = put_iv**2
-                else:
-                    continue
-                
-                # Calculate Greek for calls
                 if call_iv > 0:
-                    try:
-                        greek_val = heston_greeks(
-                            S, K, T, r, q,
-                            v0, kappa, theta, sigma_v, rho,
-                            greek=selected_greek
-                        )
-                        call_oi = float(getattr(row, 'OI_Call', 0) or 0)
-                        exposure = greek_val * call_oi * 100  # Contract multiplier
-                        exposure_rows.append({
-                            "Strike": K,
-                            "Type": "CALL",
-                            "Exposure": exposure
-                        })
-                    except Exception as e:
-                        continue
-                
-                # Calculate Greek for puts
+                    ivs.append(call_iv)
                 if put_iv > 0:
-                    try:
-                        greek_val = heston_greeks(
-                            S, K, T, r, q,
-                            v0, kappa, theta, sigma_v, rho,
-                            greek=selected_greek
-                        )
-                        put_oi = float(getattr(row, 'OI_Put', 0) or 0)
-                        exposure = -greek_val * put_oi * 100  # Negative for puts
-                        exposure_rows.append({
-                            "Strike": K,
-                            "Type": "PUT",
-                            "Exposure": exposure
-                        })
-                    except Exception as e:
-                        continue
+                    ivs.append(put_iv)
             
-            if not exposure_rows:
-                dialogs.warning("No Data", "Could not calculate Heston Greeks. Check parameters.")
+            if not ivs:
+                dialogs.warning("No Data", "No implied volatility data available.")
                 return
             
-            # Create chart
-            df_plot = pd.DataFrame(exposure_rows)
-            df_plot["Exposure_Bn"] = df_plot["Exposure"] / 1e9
+            v0 = np.mean([iv**2 for iv in ivs])  # Initial variance
             
-            # Create chart window
+            # Convert days to years for simulation
+            T_sim = n_days / 365.0
+            
+            # Simulate Heston paths
+            times, S_paths, v_paths = simulate_heston_paths(
+                S0, v0, T_sim, r, q, kappa, theta, sigma_v, rho, n_steps, n_paths=1
+            )
+            
+            # Convert times to days
+            times_days = times * 365.0
+            
+            # Get strikes for volatility smile
+            strikes = []
+            for row in df.itertuples(index=False):
+                K = float(row.Strike) if hasattr(row, 'Strike') else 0
+                if K > 0:
+                    strikes.append(K)
+            
+            if not strikes:
+                dialogs.warning("No Data", "No strike prices available.")
+                return
+            
+            strikes = sorted(set(strikes))
+            # Limit to reasonable range around current price
+            strikes = [K for K in strikes if 0.5 * S0 <= K <= 1.5 * S0]
+            
+            if len(strikes) < 3:
+                dialogs.warning("No Data", "Not enough strikes for volatility smile.")
+                return
+            
+            # Calculate volatility smile at current time
+            smile_strikes, smile_ivs = calculate_implied_volatility_smile(
+                S0, strikes, T_exp, r, q, v0, kappa, theta, sigma_v, rho, heston_call_price
+            )
+            
+            # Create chart window with two subplots
             chart_win = ctk.CTkToplevel(dashboard.root)
-            chart_win.geometry("950x700")
+            chart_win.geometry("1200x800")
             current_time = datetime.datetime.now().strftime('%I:%M %p')
             exp_date = exp.split(":")[0]
-            chart_win.title(f"{symbol} Heston {selected_greek.capitalize()} Exposure - {exp_date} | {current_time}")
+            chart_win.title(f"{symbol} Heston Model Analysis - {exp_date} | {current_time}")
             
-            # Create matplotlib figure
-            fig = Figure(figsize=(10, 6), dpi=100)
-            ax = fig.add_subplot(111)
+            # Create matplotlib figure with subplots
+            fig = Figure(figsize=(12, 8), dpi=100)
             
-            # Plot calls and puts
-            calls = df_plot[df_plot["Type"] == "CALL"]
-            puts = df_plot[df_plot["Type"] == "PUT"]
+            # Plot 1: Volatility Smile
+            ax1 = fig.add_subplot(2, 2, 1)
+            ax1.plot(smile_strikes, smile_ivs * 100, 'o-', linewidth=2, markersize=4, color='blue')
+            ax1.axvline(x=S0, color='red', linestyle='--', linewidth=1, label=f'Spot: ${S0:.2f}')
+            ax1.set_title("Implied Volatility Smile", fontweight="bold", fontsize=12)
+            ax1.set_xlabel("Strike Price", fontweight="bold")
+            ax1.set_ylabel("Implied Volatility (%)", fontweight="bold")
+            ax1.grid(True, alpha=0.3)
+            ax1.legend()
             
-            if not calls.empty:
-                ax.bar(calls["Strike"], calls["Exposure_Bn"], width=1, label="CALL", color="green", alpha=0.7)
-            if not puts.empty:
-                ax.bar(puts["Strike"], puts["Exposure_Bn"], width=1, label="PUT", color="red", alpha=0.7)
+            # Plot 2: Stock Price Dynamics
+            ax2 = fig.add_subplot(2, 2, 2)
+            ax2.plot(times_days, S_paths[0], linewidth=2, color='green', label='Stock Price')
+            ax2.axhline(y=S0, color='red', linestyle='--', linewidth=1, label=f'Initial: ${S0:.2f}')
+            ax2.set_title("Stock Price Dynamics", fontweight="bold", fontsize=12)
+            ax2.set_xlabel("Time (Days)", fontweight="bold")
+            ax2.set_ylabel("Stock Price ($)", fontweight="bold")
+            ax2.grid(True, alpha=0.3)
+            ax2.legend()
             
-            # Formatting
-            ax.set_title(
-                f"{symbol} Heston {selected_greek.capitalize()} Exposure ({exp_date}) - {current_time}",
+            # Plot 3: Volatility Dynamics
+            ax3 = fig.add_subplot(2, 2, 3)
+            # Convert variance to volatility (annualized)
+            vol_paths = np.sqrt(v_paths[0]) * np.sqrt(252) * 100  # Annualized, in percentage
+            ax3.plot(times_days, vol_paths, linewidth=2, color='purple', label='Volatility')
+            initial_vol = np.sqrt(v0) * np.sqrt(252) * 100
+            ax3.axhline(y=initial_vol, color='red', linestyle='--', linewidth=1, label=f'Initial: {initial_vol:.2f}%')
+            long_run_vol = np.sqrt(theta) * np.sqrt(252) * 100
+            ax3.axhline(y=long_run_vol, color='orange', linestyle='--', linewidth=1, label=f'Long-run: {long_run_vol:.2f}%')
+            ax3.set_title("Volatility Dynamics", fontweight="bold", fontsize=12)
+            ax3.set_xlabel("Time (Days)", fontweight="bold")
+            ax3.set_ylabel("Volatility (%)", fontweight="bold")
+            ax3.grid(True, alpha=0.3)
+            ax3.legend()
+            
+            # Plot 4: Variance Path
+            ax4 = fig.add_subplot(2, 2, 4)
+            ax4.plot(times_days, v_paths[0], linewidth=2, color='blue', label='Variance')
+            ax4.axhline(y=v0, color='red', linestyle='--', linewidth=1, label=f'Initial: {v0:.4f}')
+            ax4.axhline(y=theta, color='orange', linestyle='--', linewidth=1, label=f'Long-run: {theta:.4f}')
+            ax4.set_title("Variance Dynamics", fontweight="bold", fontsize=12)
+            ax4.set_xlabel("Time (Days)", fontweight="bold")
+            ax4.set_ylabel("Variance", fontweight="bold")
+            ax4.grid(True, alpha=0.3)
+            ax4.legend()
+            
+            fig.suptitle(
+                f"{symbol} Heston Model Analysis ({exp_date}) - {current_time}\n"
+                f"κ={kappa:.2f}, θ={theta:.4f}, σ_v={sigma_v:.3f}, ρ={rho:.3f}",
                 fontweight="bold",
                 fontsize=14
             )
-            ax.set_xlabel("Strike Price", fontweight="bold")
-            ax.set_ylabel(f"{selected_greek.capitalize()} Exposure ($ billions)", fontweight="bold")
-            ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
-            ax.grid(True, alpha=0.3)
-            ax.legend()
+            fig.tight_layout(rect=[0, 0.03, 1, 0.97])
             
             # Embed in tkinter window
             canvas = FigureCanvasTkAgg(fig, master=chart_win)
@@ -348,7 +387,8 @@ def open_heston_window(dashboard):
             chart_win.focus()
             
         except Exception as e:
-            dialogs.error("Error", f"Failed to generate Heston chart: {str(e)}")
+            import traceback
+            dialogs.error("Error", f"Failed to generate Heston chart: {str(e)}\n\n{traceback.format_exc()}")
     
     generate_btn = ctk.CTkButton(
         main_frame,
