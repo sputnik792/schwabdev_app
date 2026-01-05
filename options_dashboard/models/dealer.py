@@ -5,14 +5,15 @@ from models.exposure import gamma_exposure
 def total_gamma_at_spot(df, spot, T, r, q):
     total = 0.0
 
-    for _, row in df.iterrows():
-        strike = float(row.get("Strike", 0) or 0)
+    # Use itertuples() instead of iterrows() for better performance
+    for row in df.itertuples(index=False):
+        strike = float(row.Strike) if hasattr(row, 'Strike') else 0
         if strike <= 0:
             continue
-        call_iv = float(row.get("IV_Call", 0) or 0)
-        put_iv  = float(row.get("IV_Put", 0) or 0)
-        call_oi = float(row.get("OI_Call", 0) or 0)
-        put_oi  = float(row.get("OI_Put", 0) or 0)
+        call_iv = float(getattr(row, 'IV_Call', 0) or 0)
+        put_iv  = float(getattr(row, 'IV_Put', 0) or 0)
+        call_oi = float(getattr(row, 'OI_Call', 0) or 0)
+        put_oi  = float(getattr(row, 'OI_Put', 0) or 0)
         if call_iv > 0 and call_oi > 0:
             g_call = gamma(spot, strike, T, r, q, call_iv)
             total += gamma_exposure(g_call, spot, call_oi)

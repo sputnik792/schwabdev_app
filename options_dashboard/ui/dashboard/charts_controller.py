@@ -84,16 +84,20 @@ def generate_selected_chart(self, spot_override=None):
 
     CONTRACT_MULT = 100
     rows = []
-    for _, row in state.exp_data_map[exp].iterrows():
-        K = float(row["Strike"])
+    # Use itertuples() instead of iterrows() for better performance
+    df = state.exp_data_map[exp]
+    for row in df.itertuples(index=False):
+        K = float(row.Strike) if hasattr(row, 'Strike') else 0
         if K <= 0:
             continue
 
         for opt in ("CALL", "PUT"):
             # Column names are IV_Call, OI_Call, IV_Put, OI_Put (capital C/P)
             opt_key = opt.capitalize()  # "CALL" -> "Call", "PUT" -> "Put"
-            iv = float(row.get(f"IV_{opt_key}", 0) or 0)
-            oi = float(row.get(f"OI_{opt_key}", 0) or 0)
+            iv_attr = f"IV_{opt_key}"
+            oi_attr = f"OI_{opt_key}"
+            iv = float(getattr(row, iv_attr, 0) or 0)
+            oi = float(getattr(row, oi_attr, 0) or 0)
             if iv <= 0 or oi <= 0:
                 continue
 
@@ -145,7 +149,7 @@ def generate_selected_chart(self, spot_override=None):
         state.exp_data_map[exp],
         spot * 0.9,
         spot * 1.1,
-        120,
+        60,  # Reduced from 120 to 60 for better performance
         T,
         RISK_FREE_RATE,
         DIVIDEND_YIELD
@@ -320,16 +324,19 @@ def generate_chart_group(self):
                 
                 df = state.exp_data_map[exp]
                 has_valid_data = False
-                for _, row in df.iterrows():
+                # Use itertuples() instead of iterrows() for better performance
+                for row in df.itertuples(index=False):
                     try:
-                        K = float(row.get("Strike", 0) or 0)
+                        K = float(row.Strike) if hasattr(row, 'Strike') else 0
                         if pd.isna(K) or K <= 0:
                             continue
                         for opt in ("CALL", "PUT"):
                             # Column names are IV_Call, OI_Call, IV_Put, OI_Put (capital C/P)
                             opt_key = opt.capitalize()  # "CALL" -> "Call", "PUT" -> "Put"
-                            iv_val = row.get(f"IV_{opt_key}", 0)
-                            oi_val = row.get(f"OI_{opt_key}", 0)
+                            iv_attr = f"IV_{opt_key}"
+                            oi_attr = f"OI_{opt_key}"
+                            iv_val = getattr(row, iv_attr, 0)
+                            oi_val = getattr(row, oi_attr, 0)
                             # Handle NaN, None, or empty values
                             iv = 0.0 if (pd.isna(iv_val) or iv_val == "" or iv_val is None) else float(iv_val)
                             oi = 0.0 if (pd.isna(oi_val) or oi_val == "" or oi_val is None) else float(oi_val)
@@ -338,7 +345,7 @@ def generate_chart_group(self):
                                 break
                         if has_valid_data:
                             break
-                    except (ValueError, TypeError):
+                    except (ValueError, TypeError, AttributeError):
                         continue
                 
                 if has_valid_data:
