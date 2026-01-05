@@ -511,6 +511,29 @@ class Dashboard(ctk.CTkFrame):
         )
         pricing_label.pack(pady=(10, 10))
         
+        # Pricing model buttons
+        def open_pricing_model(model_name):
+            """Placeholder function for pricing models"""
+            from ui import dialogs
+            dialogs.info("Coming Soon", f"{model_name} pricing model will be implemented soon.")
+        
+        pricing_models = [
+            "Heston",
+            "SABR",
+            "Dupire",
+            "Jump-Diff (Merton)",
+            "Bachelier"
+        ]
+        
+        for model in pricing_models:
+            btn = ctk.CTkButton(
+                pricing_frame,
+                text=model,
+                command=lambda m=model: open_pricing_model(m),
+                width=150
+            )
+            btn.pack(pady=5)
+        
         # Experimental column
         experimental_frame = ctk.CTkFrame(columns_frame)
         experimental_frame.pack(side="left", fill="both", expand=True, padx=10)
