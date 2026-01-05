@@ -263,10 +263,10 @@ def generate_chart_group(self):
         # Get settings for this ticker (default to include=True, range="1 day")
         ticker_settings = group_settings.get(symbol, {"include": True, "range": "1 day"})
         
-        # Check if ticker is included (for now, always include since checkbox does nothing)
-        # if not ticker_settings.get("include", True):
-        #     skipped += 1
-        #     continue
+        # Check if ticker is included - skip if checkbox is unchecked
+        if not ticker_settings.get("include", True):
+            skipped += 1
+            continue
         
         # Get range setting
         range_str = ticker_settings.get("range", "1 day")
