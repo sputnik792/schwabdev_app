@@ -188,6 +188,13 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
         dialogs.warning("Invalid Ticker", "Please enter a ticker symbol.")
         return
 
+    # Show fetching dialog
+    fetching_dialog = dialogs.show_fetching_dialog(
+        dashboard.root,
+        "Fetching Stock",
+        f"Fetching stock data for {symbol}..."
+    )
+
     def worker():
         try:
             price = fetch_stock_price(dashboard.client, symbol)
@@ -208,6 +215,13 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
             )
 
             def update():
+                # Close fetching dialog before showing completion message
+                try:
+                    if fetching_dialog and fetching_dialog.winfo_exists():
+                        fetching_dialog.destroy()
+                except:
+                    pass
+                
                 # Store data with a flag to indicate it's from single view
                 # But first, preserve multi-view data if it exists
                 existing_state = dashboard.ticker_data.get(symbol)
@@ -448,9 +462,15 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
             dashboard.root.after(0, update)
 
         except Exception as e:
-            dashboard.root.after(
-                0, lambda: dialogs.error("Fetch Error", str(e))
-            )
+            def show_error():
+                # Close fetching dialog on error
+                try:
+                    if fetching_dialog and fetching_dialog.winfo_exists():
+                        fetching_dialog.destroy()
+                except:
+                    pass
+                dialogs.error("Fetch Error", str(e))
+            dashboard.root.after(0, show_error)
 
     threading.Thread(target=worker, daemon=True).start()
 
