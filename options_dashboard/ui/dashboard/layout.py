@@ -949,14 +949,14 @@ def show_single_view(self):
         table_wrap.pack(fill="both", expand=True, padx=16, pady=(0, 16))
         
         cols = [
-            "Bid_Call","Ask_Call","Delta_Call","Theta_Call","Gamma_Call","IV_Call","OI_Call",
+            "Bid_Call","Ask_Call","Delta_Call","Theta_Call","Gamma_Call","IV_Call","OI_Call","Prob_ITM_Call",
             "Strike",
-            "Bid_Put","Ask_Put","Delta_Put","Theta_Put","Gamma_Put","IV_Put","OI_Put"
+            "Bid_Put","Ask_Put","Delta_Put","Theta_Put","Gamma_Put","IV_Put","OI_Put","Prob_ITM_Put"
         ]
         headers = [
-            "Call Bid","Call Ask","Δ(Call)","Θ(Call)","Γ(Call)","IV(Call)","OI(Call)",
+            "Call Bid","Call Ask","Δ(Call)","Θ(Call)","Γ(Call)","IV(Call)","OI(Call)","Prob ITM(Call)",
             "Strike",
-            "Put Bid","Put Ask","Δ(Put)","Θ(Put)","Γ(Put)","IV(Put)","OI(Put)"
+            "Put Bid","Put Ask","Δ(Put)","Θ(Put)","Γ(Put)","IV(Put)","OI(Put)","Prob ITM(Put)"
         ]
         
         # Create tksheet instead of Treeview
@@ -1207,9 +1207,10 @@ def show_single_view(self):
                                 df = state.exp_data_map.get(selected_exp)
                                 if df is not None and not df.empty:
                                     # Convert DataFrame to list of lists for tksheet
+                                    from ui.dashboard.tabs import format_row_data
                                     data = []
                                     for _, row in df.iterrows():
-                                        data.append([str(row.get(c, "")) for c in cols])
+                                        data.append(format_row_data(row, cols))
                                     sheet.set_sheet_data(data)
                                     # Highlight rows based on strike price vs stock price
                                     highlight_rows_by_strike(sheet, df, cols, state.price)

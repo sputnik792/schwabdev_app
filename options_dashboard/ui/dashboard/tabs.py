@@ -4,6 +4,7 @@ from tksheet import Sheet
 from style.theme import *
 from style.theme import get_fonts
 import customtkinter as ctk
+import pandas as pd
 
 def reapply_highlighting_for_symbol(dashboard, symbol):
     """
@@ -41,6 +42,28 @@ def reapply_highlighting_for_symbol(dashboard, symbol):
                 df = state.exp_data_map.get(expiration)
                 if df is not None and not df.empty:
                     highlight_rows_by_strike(sheet, df, cols, state.price)
+
+def format_row_data(row, cols):
+    """
+    Format a DataFrame row for display in tksheet.
+    Formats Prob ITM columns as percentages.
+    """
+    row_data = []
+    for c in cols:
+        val = row.get(c, "")
+        # Format Prob ITM columns as percentages
+        if c in ["Prob_ITM_Call", "Prob_ITM_Put"]:
+            try:
+                if pd.notna(val) and val != "":
+                    val = f"{float(val) * 100:.2f}%"
+                else:
+                    val = ""
+            except (ValueError, TypeError):
+                val = ""
+        else:
+            val = str(val) if val != "" else ""
+        row_data.append(val)
+    return row_data
 
 def highlight_rows_by_strike(sheet, df, cols, stock_price):
     """
@@ -174,14 +197,14 @@ def create_stock_tab(self, symbol):
     table_wrap.pack(fill="both", expand=True, padx=16, pady=(0, 16))
     
     cols = [
-        "Bid_Call","Ask_Call","Delta_Call","Theta_Call","Gamma_Call","IV_Call","OI_Call",
+        "Bid_Call","Ask_Call","Delta_Call","Theta_Call","Gamma_Call","IV_Call","OI_Call","Prob_ITM_Call",
         "Strike",
-        "Bid_Put","Ask_Put","Delta_Put","Theta_Put","Gamma_Put","IV_Put","OI_Put"
+        "Bid_Put","Ask_Put","Delta_Put","Theta_Put","Gamma_Put","IV_Put","OI_Put","Prob_ITM_Put"
     ]
     headers = [
-        "Call Bid","Call Ask","Δ(Call)","Θ(Call)","Γ(Call)","IV(Call)","OI(Call)",
+        "Call Bid","Call Ask","Δ(Call)","Θ(Call)","Γ(Call)","IV(Call)","OI(Call)","Prob ITM(Call)",
         "Strike",
-        "Put Bid","Put Ask","Δ(Put)","Θ(Put)","Γ(Put)","IV(Put)","OI(Put)"
+        "Put Bid","Put Ask","Δ(Put)","Θ(Put)","Γ(Put)","IV(Put)","OI(Put)","Prob ITM(Put)"
     ]
     
     # Create tksheet instead of Treeview
@@ -231,7 +254,7 @@ def update_table_for_symbol(self, symbol, expiration):
     # Convert DataFrame to list of lists for tksheet
     data = []
     for _, row in df.iterrows():
-        data.append([str(row.get(c, "")) for c in cols])
+        data.append(format_row_data(row, cols))
     
     # Update the sheet with new data
     sheet.set_sheet_data(data)

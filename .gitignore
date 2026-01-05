@@ -3,6 +3,7 @@
 *.csv
 *.txt
 api_config.json
+test.py
 
 # ignore all .jsons
 *.json

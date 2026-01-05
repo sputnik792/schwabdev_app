@@ -6,11 +6,21 @@ from data.schwab_api import fetch_stock_price, fetch_option_chain
 from data.csv_loader import load_csv_index
 from ui import dialogs
 from ui.dashboard.tabs import highlight_rows_by_strike
+from models.greeks import calculate_prob_itm
+from utils.time import time_to_expiration
+from config import RISK_FREE_RATE
 
 def fetch_worker(self, symbol):
     try:
         price = fetch_stock_price(self.client, symbol)
         exp_map, expirations = fetch_option_chain(self.client, symbol)
+
+        # Calculate Prob ITM for each expiration
+        for exp_date in expirations:
+            df = exp_map.get(exp_date)
+            if df is not None and not df.empty:
+                T = time_to_expiration(exp_date)
+                exp_map[exp_date] = calculate_prob_itm(df, price, T, RISK_FREE_RATE)
 
         state = TickerState(
             symbol=symbol,
@@ -127,6 +137,13 @@ def fetch_single_symbol(dashboard, symbol):
             price = fetch_stock_price(dashboard.client, symbol)
             exp_map, expirations = fetch_option_chain(dashboard.client, symbol)
 
+            # Calculate Prob ITM for each expiration
+            for exp_date in expirations:
+                df = exp_map.get(exp_date)
+                if df is not None and not df.empty:
+                    T = time_to_expiration(exp_date)
+                    exp_map[exp_date] = calculate_prob_itm(df, price, T, RISK_FREE_RATE)
+
             state = TickerState(
                 symbol=symbol,
                 price=price,
@@ -168,6 +185,13 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
         try:
             price = fetch_stock_price(dashboard.client, symbol)
             exp_map, expirations = fetch_option_chain(dashboard.client, symbol)
+
+            # Calculate Prob ITM for each expiration
+            for exp_date in expirations:
+                df = exp_map.get(exp_date)
+                if df is not None and not df.empty:
+                    T = time_to_expiration(exp_date)
+                    exp_map[exp_date] = calculate_prob_itm(df, price, T, RISK_FREE_RATE)
 
             state = TickerState(
                 symbol=symbol,
@@ -347,9 +371,10 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                                 print(f"[SINGLE VIEW SAVE] df={df is not None and not df.empty if df is not None else False}, rows={len(df) if df is not None and not df.empty else 0}")
                                 if df is not None and not df.empty:
                                     # Convert DataFrame to list of lists for tksheet
+                                    from ui.dashboard.tabs import format_row_data
                                     data = []
                                     for _, row in df.iterrows():
-                                        data.append([str(row.get(c, "")) for c in cols])
+                                        data.append(format_row_data(row, cols))
                                     print(f"[SINGLE VIEW SAVE] Setting sheet data with {len(data)} rows")
                                     sheet.set_sheet_data(data)
                                     # Highlight rows based on strike price vs stock price
