@@ -1,11 +1,12 @@
 import customtkinter as ctk
+import datetime
 import numpy as np
 from scipy.stats import norm
 from utils.time import time_to_expiration
 from config import RISK_FREE_RATE, DIVIDEND_YIELD
 
 
-def open_stats_modal(root, state, expiration):
+def open_stats_modal(root, state, expiration, symbol=None):
     df = state.exp_data_map.get(expiration)
     if df is None or df.empty:
         return
@@ -45,8 +46,49 @@ def open_stats_modal(root, state, expiration):
 
     win = ctk.CTkToplevel(root)
     win.title("Stats Breakdown")
-    win.geometry("420x300")
+    win.geometry("420x400")
+    
+    # Ensure window stays in front
+    win.lift()
+    win.focus()
+    win.attributes("-topmost", True)
+    win.after(100, lambda: win.attributes("-topmost", False))
 
+    # Title section with ticker symbol
+    title_frame = ctk.CTkFrame(win, fg_color="transparent")
+    title_frame.pack(fill="x", padx=20, pady=(20, 10))
+    
+    if symbol:
+        ctk.CTkLabel(
+            title_frame,
+            text=symbol,
+            font=("Segoe UI", 24, "bold")
+        ).pack()
+    
+    # Expiration date and time generated
+    info_frame = ctk.CTkFrame(win, fg_color="transparent")
+    info_frame.pack(fill="x", padx=20, pady=(0, 20))
+    
+    exp_date = expiration.split(":")[0] if ":" in expiration else expiration
+    current_datetime = datetime.datetime.now()
+    current_date_time_str = current_datetime.strftime('%Y-%m-%d %I:%M:%S %p')
+    
+    ctk.CTkLabel(
+        info_frame,
+        text=f"Expiration date: {exp_date}",
+        font=("Segoe UI", 12)
+    ).pack(anchor="w", pady=2)
+    
+    ctk.CTkLabel(
+        info_frame,
+        text=f"Time generated: {current_date_time_str}",
+        font=("Segoe UI", 12)
+    ).pack(anchor="w", pady=2)
+    
+    # Separator
+    ctk.CTkFrame(win, height=1).pack(fill="x", padx=20, pady=10)
+
+    # Stats rows
     for label, value in rows:
         ctk.CTkLabel(win, text=label).pack(pady=4)
         ctk.CTkLabel(win, text=f"{value:.3f}", font=("Segoe UI", 16, "bold")).pack()

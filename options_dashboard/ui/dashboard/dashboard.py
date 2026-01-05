@@ -391,7 +391,7 @@ class Dashboard(ctk.CTkFrame):
             dialogs.warning("No Expiration", "Please select an expiration date.")
             return
 
-        open_stats_modal(self.root, state, exp)
+        open_stats_modal(self.root, state, exp, symbol)
 
     def edit_api_credentials(self):
         """Open window to edit API credentials"""
