@@ -756,7 +756,9 @@ def show_single_view(self):
             # Use current ticker from ticker_var instead of hardcoded single_symbol
             current_ticker = ticker_var.get().strip().upper()
             if current_ticker:
-                self.on_expiration_change(None, current_ticker)
+                # For single view, use the "_single_{symbol}" key format
+                single_view_key = f"_single_{current_ticker}"
+                self.on_expiration_change(None, single_view_key)
         
         exp_dropdown = ctk.CTkOptionMenu(
             row,

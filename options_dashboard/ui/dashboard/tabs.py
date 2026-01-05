@@ -245,7 +245,12 @@ def update_table_for_symbol(self, symbol, expiration):
         # Sheet not found - this shouldn't happen but handle gracefully
         return
     
-    state = self.ticker_data.get(symbol)
+    # Extract actual symbol from key if it's a single view key (format: "_single_{symbol}")
+    actual_symbol = symbol
+    if symbol.startswith("_single_"):
+        actual_symbol = symbol.replace("_single_", "")
+    
+    state = self.ticker_data.get(actual_symbol)
     if not state:
         return
     df = state.exp_data_map.get(expiration)
