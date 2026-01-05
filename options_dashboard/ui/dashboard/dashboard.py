@@ -478,6 +478,12 @@ class Dashboard(ctk.CTkFrame):
         )
         experimental_label.pack(pady=(10, 10))
 
+    def open_group_settings(self):
+        """Open the Group Settings window"""
+        # TODO: Implement Group Settings functionality
+        from ui import dialogs
+        dialogs.info("Group Settings", "Group Settings feature coming soon!")
+
     def edit_api_credentials(self):
         """Open window to edit API credentials"""
         from options_dashboard.config import APP_KEY, SECRET

@@ -550,6 +550,13 @@ def show_multi_view(self):
             command=self.edit_tickers
         ).pack(side="left", padx=10)
         
+        ctk.CTkButton(
+            button_bar,
+            text="Group Settings",
+            width=120,
+            command=self.open_group_settings
+        ).pack(side="left", padx=10)
+        
         # Store reference to chart group button so we can enable/disable it
         self.generate_chart_group_button = ctk.CTkButton(
             button_bar,
