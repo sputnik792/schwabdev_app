@@ -124,8 +124,10 @@ class Dashboard(ctk.CTkFrame):
             self.root.after(100, self.start_auto_refresh)
         
         # Update refresh button visibility based on saved mode
-        from ui.dashboard.layout import update_refresh_button_visibility
+        from ui.dashboard.layout import update_refresh_button_visibility, update_stats_button_state
         self.root.after(200, lambda: update_refresh_button_visibility(self))
+        # Update stats breakdown button state based on existing data
+        self.root.after(250, lambda: update_stats_button_state(self))
 
     def rebuild(self):
         # Save dashboard state to root window so it persists across rebuild
@@ -231,6 +233,12 @@ class Dashboard(ctk.CTkFrame):
 
         def update_layout():
             """Rebuild the layout based on current entry count"""
+            # Save current values from entry widgets before destroying them
+            # This preserves user input when layout is rebuilt
+            for i, var in enumerate(entry_vars):
+                if i < len(current_values):
+                    current_values[i] = var.get()
+            
             # Clear existing entries
             for widget in entry_widgets:
                 widget.destroy()
