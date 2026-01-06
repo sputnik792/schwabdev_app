@@ -1,8 +1,11 @@
 import customtkinter as ctk
 import datetime
+import json
+import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from pathlib import Path
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
 
@@ -14,6 +17,47 @@ from models.data_analysis.pricing_models.heston_simulation import (
 from utils.time import time_to_expiration
 from config import RISK_FREE_RATE, DIVIDEND_YIELD
 from ui import dialogs
+
+
+def get_heston_params_file_path():
+    """Get the absolute path to the Heston parameters file"""
+    # Get the data_analysis directory, then go to settings folder
+    data_analysis_dir = Path(__file__).resolve().parent.parent
+    return data_analysis_dir / "settings" / "heston_params.json"
+
+
+# Factory default values (used for reset)
+FACTORY_DEFAULTS = {
+    "kappa": 2.0,
+    "theta": 0.04,
+    "sigma_v": 0.3,
+    "rho": -0.7,
+    "simulation_days": 30,
+    "time_steps": 100
+}
+
+def load_heston_params():
+    """Load Heston model parameters from JSON file"""
+    params_path = get_heston_params_file_path()
+    if os.path.exists(params_path):
+        try:
+            with open(params_path, "r") as f:
+                params = json.load(f)
+                return params
+        except Exception as e:
+            print(f"Failed to load Heston parameters: {e}")
+    # Return defaults if file doesn't exist or fails to load
+    return FACTORY_DEFAULTS.copy()
+
+
+def save_heston_params(params):
+    """Save Heston model parameters to JSON file"""
+    try:
+        params_path = get_heston_params_file_path()
+        with open(params_path, "w") as f:
+            json.dump(params, f, indent=2)
+    except Exception as e:
+        print(f"Failed to save Heston parameters: {e}")
 
 
 def open_heston_window(dashboard):
@@ -103,11 +147,14 @@ def open_heston_window(dashboard):
     params_frame = ctk.CTkFrame(main_frame)
     params_frame.pack(fill="x", pady=10)
     
-    # Default parameter values (good defaults for Heston)
-    default_kappa = 2.0  # Mean reversion speed
-    default_theta = 0.04  # Long-run variance (20% vol squared)
-    default_sigma_v = 0.3  # Vol of vol
-    default_rho = -0.7  # Correlation
+    # Load parameter values from JSON file
+    saved_params = load_heston_params()
+    default_kappa = saved_params.get("kappa", FACTORY_DEFAULTS["kappa"])  # Mean reversion speed
+    default_theta = saved_params.get("theta", FACTORY_DEFAULTS["theta"])  # Long-run variance (20% vol squared)
+    default_sigma_v = saved_params.get("sigma_v", FACTORY_DEFAULTS["sigma_v"])  # Vol of vol
+    default_rho = saved_params.get("rho", FACTORY_DEFAULTS["rho"])  # Correlation
+    default_days = saved_params.get("simulation_days", FACTORY_DEFAULTS["simulation_days"])
+    default_steps = saved_params.get("time_steps", FACTORY_DEFAULTS["time_steps"])
     
     # Parameter sliders
     params = {}
@@ -176,15 +223,50 @@ def open_heston_window(dashboard):
     rho_value_label.pack()
     params['rho'] = (rho_var, rho_value_label)
     
-    # Update value labels when sliders change
+    # Update value labels when sliders change and save parameters
     def update_kappa_label(value):
         params['kappa'][1].configure(text=f"{value:.2f}")
+        save_heston_params({
+            "kappa": value,
+            "theta": theta_var.get(),
+            "sigma_v": sigma_v_var.get(),
+            "rho": rho_var.get(),
+            "simulation_days": days_var.get(),
+            "time_steps": steps_var.get()
+        })
+    
     def update_theta_label(value):
         params['theta'][1].configure(text=f"{value:.4f}")
+        save_heston_params({
+            "kappa": kappa_var.get(),
+            "theta": value,
+            "sigma_v": sigma_v_var.get(),
+            "rho": rho_var.get(),
+            "simulation_days": days_var.get(),
+            "time_steps": steps_var.get()
+        })
+    
     def update_sigma_v_label(value):
         params['sigma_v'][1].configure(text=f"{value:.3f}")
+        save_heston_params({
+            "kappa": kappa_var.get(),
+            "theta": theta_var.get(),
+            "sigma_v": value,
+            "rho": rho_var.get(),
+            "simulation_days": days_var.get(),
+            "time_steps": steps_var.get()
+        })
+    
     def update_rho_label(value):
         params['rho'][1].configure(text=f"{value:.3f}")
+        save_heston_params({
+            "kappa": kappa_var.get(),
+            "theta": theta_var.get(),
+            "sigma_v": sigma_v_var.get(),
+            "rho": value,
+            "simulation_days": days_var.get(),
+            "time_steps": steps_var.get()
+        })
     
     kappa_slider.configure(command=update_kappa_label)
     theta_slider.configure(command=update_theta_label)
@@ -199,13 +281,30 @@ def open_heston_window(dashboard):
     )
     days_label.pack(pady=(20, 5))
     
-    days_var = ctk.IntVar(value=30)
+    days_var = ctk.IntVar(value=default_days)
     days_entry = ctk.CTkEntry(
         main_frame,
         textvariable=days_var,
         width=150
     )
     days_entry.pack(pady=5)
+    
+    # Save days when changed
+    def update_days(*args):
+        try:
+            value = days_var.get()
+            if value > 0:
+                save_heston_params({
+                    "kappa": kappa_var.get(),
+                    "theta": theta_var.get(),
+                    "sigma_v": sigma_v_var.get(),
+                    "rho": rho_var.get(),
+                    "simulation_days": value,
+                    "time_steps": steps_var.get()
+                })
+        except:
+            pass
+    days_var.trace("w", update_days)
     
     # Number of time steps
     steps_label = ctk.CTkLabel(
@@ -215,13 +314,74 @@ def open_heston_window(dashboard):
     )
     steps_label.pack(pady=(10, 5))
     
-    steps_var = ctk.IntVar(value=100)
+    steps_var = ctk.IntVar(value=default_steps)
     steps_entry = ctk.CTkEntry(
         main_frame,
         textvariable=steps_var,
         width=150
     )
     steps_entry.pack(pady=5)
+    
+    # Save steps when changed
+    def update_steps(*args):
+        try:
+            value = steps_var.get()
+            if value > 0:
+                save_heston_params({
+                    "kappa": kappa_var.get(),
+                    "theta": theta_var.get(),
+                    "sigma_v": sigma_v_var.get(),
+                    "rho": rho_var.get(),
+                    "simulation_days": days_var.get(),
+                    "time_steps": value
+                })
+        except:
+            pass
+    steps_var.trace("w", update_steps)
+    
+    # Reset to defaults function
+    def reset_to_defaults():
+        """Reset all parameters to factory default values"""
+        # Temporarily disable auto-save to avoid multiple saves
+        kappa_slider.configure(command=lambda v: None)
+        theta_slider.configure(command=lambda v: None)
+        sigma_v_slider.configure(command=lambda v: None)
+        rho_slider.configure(command=lambda v: None)
+        
+        # Reset all values
+        kappa_var.set(FACTORY_DEFAULTS["kappa"])
+        theta_var.set(FACTORY_DEFAULTS["theta"])
+        sigma_v_var.set(FACTORY_DEFAULTS["sigma_v"])
+        rho_var.set(FACTORY_DEFAULTS["rho"])
+        days_var.set(FACTORY_DEFAULTS["simulation_days"])
+        steps_var.set(FACTORY_DEFAULTS["time_steps"])
+        
+        # Update labels
+        params['kappa'][1].configure(text=f"{FACTORY_DEFAULTS['kappa']:.2f}")
+        params['theta'][1].configure(text=f"{FACTORY_DEFAULTS['theta']:.4f}")
+        params['sigma_v'][1].configure(text=f"{FACTORY_DEFAULTS['sigma_v']:.3f}")
+        params['rho'][1].configure(text=f"{FACTORY_DEFAULTS['rho']:.3f}")
+        
+        # Re-enable auto-save with proper callbacks
+        kappa_slider.configure(command=update_kappa_label)
+        theta_slider.configure(command=update_theta_label)
+        sigma_v_slider.configure(command=update_sigma_v_label)
+        rho_slider.configure(command=update_rho_label)
+        
+        # Save to JSON file
+        save_heston_params(FACTORY_DEFAULTS.copy())
+    
+    # Reset button
+    reset_btn = ctk.CTkButton(
+        main_frame,
+        text="Reset to Defaults",
+        command=reset_to_defaults,
+        width=200,
+        height=35,
+        font=ctk.CTkFont(size=12),
+        fg_color=("gray70", "gray30")
+    )
+    reset_btn.pack(pady=(10, 5))
     
     # Generate button
     def generate_heston_chart():
@@ -385,6 +545,16 @@ def open_heston_window(dashboard):
             chart_win.update_idletasks()
             chart_win.lift()
             chart_win.focus()
+            
+            # Save parameters after generating chart (in case they were changed)
+            save_heston_params({
+                "kappa": kappa,
+                "theta": theta,
+                "sigma_v": sigma_v,
+                "rho": rho,
+                "simulation_days": n_days,
+                "time_steps": n_steps
+            })
             
         except Exception as e:
             import traceback
