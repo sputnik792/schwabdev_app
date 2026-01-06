@@ -268,23 +268,36 @@ class Dashboard(ctk.CTkFrame):
             add_btn.configure(state="normal" if num_entries < MAX_TICKERS else "disabled")
             remove_btn.configure(state="normal" if num_entries > 1 else "disabled")
 
-            # Only auto-resize window if user hasn't manually resized it
+            # Always update window size when entries change, but respect manual resize flag
+            # Calculate rows needed: if entries <= 12, use left column only, else use both
+            if num_entries == 0:
+                rows_needed = 1
+            elif num_entries <= 12:
+                rows_needed = num_entries
+            else:
+                # Both columns are used, calculate max rows needed
+                # Left column always has 12 (or less if total < 12), right column has the rest
+                left_count = 12
+                right_count = num_entries - 12
+                rows_needed = max(left_count, right_count)
+            
+            # Calculate height with more padding:
+            # - Base height for headers, buttons, padding: 220 (increased from 180)
+            # - Row height: 48 pixels per entry (increased from 45 for better spacing)
+            # - Add extra padding for save button area
+            calculated_height = 220 + (rows_needed * 48)
+            
+            # Only auto-resize if user hasn't manually resized, but ensure minimum height
             if not user_manually_resized[0]:
-                # Update window size
-                # Calculate rows needed: if entries <= 12, use left column only, else use both
-                if num_entries == 0:
-                    rows_needed = 1
-                elif num_entries <= 12:
-                    rows_needed = num_entries
-                else:
-                    # Both columns are used, calculate max rows needed
-                    # Left column always has 12 (or less if total < 12), right column has the rest
-                    left_count = 12
-                    right_count = num_entries - 12
-                    rows_needed = max(left_count, right_count)
-                
-                new_height = 180 + (rows_needed * 45)  # Increased from 120 to 180 to show save button
-                win.geometry(f"500x{new_height}")
+                win.geometry(f"500x{calculated_height}")
+            else:
+                # If user manually resized, ensure window is at least tall enough to show save button
+                current_height = win.winfo_height()
+                min_height = calculated_height
+                if current_height < min_height:
+                    # Update only the height, keep the width
+                    current_width = win.winfo_width()
+                    win.geometry(f"{current_width}x{min_height}")
 
         def add_ticker():
             # Add a new empty ticker
