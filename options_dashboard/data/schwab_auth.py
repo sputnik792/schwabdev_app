@@ -4,7 +4,7 @@ import subprocess
 import shutil
 import tempfile
 import schwabdev
-from config import APP_KEY, SECRET, CALLBACK_URL
+from config_loader import APP_KEY, SECRET, CALLBACK_URL
 
 # -----------------------------
 # OAuth subprocess bridge

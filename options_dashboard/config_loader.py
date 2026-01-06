@@ -1,14 +1,15 @@
 """
 Configuration loader that reads API credentials from JSON file.
-Falls back to defaults from config.py if JSON file doesn't exist.
+This is the single source of truth for API credentials.
 """
 import json
 from pathlib import Path
 
-# Import defaults from config.py (the tracked file with default settings)
-from options_dashboard.config import APP_KEY as _DEFAULT_APP_KEY
-from options_dashboard.config import SECRET as _DEFAULT_SECRET
-from options_dashboard.config import CALLBACK_URL as _DEFAULT_CALLBACK_URL
+# Default API credentials (fallback if api_config.json doesn't exist)
+# These are empty by default - users must configure via UI
+_DEFAULT_APP_KEY = ""
+_DEFAULT_SECRET = ""
+_DEFAULT_CALLBACK_URL = "https://127.0.0.1"
 
 # Path to API config JSON file (relative to this file)
 # This file is gitignored and contains user-entered credentials
@@ -17,7 +18,7 @@ API_CONFIG_FILE = _CONFIG_DIR / "api_config.json"
 
 def _load_api_config():
     """
-    Load API credentials from JSON file, or return defaults from config.py if file doesn't exist.
+    Load API credentials from JSON file, or return defaults if file doesn't exist.
     The JSON file is generated when user edits credentials via the UI.
     """
     if API_CONFIG_FILE.exists():
@@ -30,15 +31,15 @@ def _load_api_config():
                 "CALLBACK_URL": config.get("CALLBACK_URL", _DEFAULT_CALLBACK_URL),
             }
         except (json.JSONDecodeError, IOError) as e:
-            # If file is corrupted, return defaults from config.py
-            print(f"Warning: Could not read api_config.json: {e}. Using default values from config.py.")
+            # If file is corrupted, return defaults
+            print(f"Warning: Could not read api_config.json: {e}. Using default values.")
             return {
                 "APP_KEY": _DEFAULT_APP_KEY,
                 "SECRET": _DEFAULT_SECRET,
                 "CALLBACK_URL": _DEFAULT_CALLBACK_URL,
             }
     else:
-        # File doesn't exist, use defaults from config.py
+        # File doesn't exist, use defaults
         return {
             "APP_KEY": _DEFAULT_APP_KEY,
             "SECRET": _DEFAULT_SECRET,

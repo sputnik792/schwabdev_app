@@ -766,7 +766,7 @@ class Dashboard(ctk.CTkFrame):
 
     def edit_api_credentials(self):
         """Open window to edit API credentials"""
-        from options_dashboard.config import APP_KEY, SECRET
+        from options_dashboard.config_loader import APP_KEY, SECRET
         
         win = ctk.CTkToplevel(self.root)
         win.title("Edit API Credentials")

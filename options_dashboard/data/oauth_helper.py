@@ -8,7 +8,7 @@ PROJECT_ROOT = os.path.abspath(
 )
 sys.path.insert(0, PROJECT_ROOT)
 
-from config import APP_KEY, SECRET, CALLBACK_URL
+from config_loader import APP_KEY, SECRET, CALLBACK_URL
 
 def main():
     redirect_url = sys.stdin.readline().strip()

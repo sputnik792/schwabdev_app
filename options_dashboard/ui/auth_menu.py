@@ -3,7 +3,7 @@ from tkinter import ttk
 import webbrowser
 
 from ui import dialogs
-from config import APP_KEY, CALLBACK_URL
+from config_loader import APP_KEY, CALLBACK_URL
 from data.schwab_auth import (
     run_oauth_subprocess,
     create_authenticated_client
