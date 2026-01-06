@@ -374,6 +374,32 @@ def show_color_theme_settings(dashboard):
     
     theme_dropdown.pack(pady=20)
 
+def update_stats_button_state(dashboard):
+    """Update stats breakdown button state based on whether ticker data exists"""
+    if not hasattr(dashboard, 'stats_breakdown_button'):
+        return
+    
+    # Check if there's any ticker data available
+    has_data = False
+    if hasattr(dashboard, 'ticker_data') and dashboard.ticker_data:
+        # Check if any ticker has valid expiration data
+        for symbol, state in dashboard.ticker_data.items():
+            if state and hasattr(state, 'exp_data_map') and state.exp_data_map:
+                # Check if any expiration has data
+                for exp, df in state.exp_data_map.items():
+                    if df is not None and not df.empty:
+                        has_data = True
+                        break
+                if has_data:
+                    break
+    
+    # Enable button if data exists, otherwise keep disabled
+    if has_data:
+        dashboard.stats_breakdown_button.configure(state="normal")
+    else:
+        dashboard.stats_breakdown_button.configure(state="disabled")
+
+
 def update_refresh_button_visibility(dashboard):
     """Update visibility of Refresh Tickers button based on mode"""
     mode = get_state_value("ticker_refresh_mode", "auto")
@@ -449,6 +475,9 @@ def build_sidebar(self):
         state="disabled"  # Disabled until fetch completes
     )
     self.stats_breakdown_button.pack(fill="x", padx=10, pady=6)
+    
+    # Update button state based on existing data (e.g., after theme change rebuild)
+    update_stats_button_state(self)
     
     self.data_analysis_button = ctk.CTkButton(
         self.sidebar,
