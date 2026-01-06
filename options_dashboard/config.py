@@ -1,7 +1,7 @@
 # Default API credentials (user can override these in api_config.json via the UI)
 # These are default values that come with the app (tracked in git)
-APP_KEY = "NWy77tZSfVAMzZBMkZ6HBoliNH7NX6Rh"
-SECRET = "448aaPGZUahJKaMv"
+APP_KEY = ""
+SECRET = ""
 CALLBACK_URL = "https://127.0.0.1"
 
 # Application configuration constants (defaults that come with the app)
