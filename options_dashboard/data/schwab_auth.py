@@ -4,7 +4,7 @@ import subprocess
 import shutil
 import tempfile
 import schwabdev
-from config_loader import APP_KEY, SECRET, CALLBACK_URL
+from config_loader import APP_KEY, SECRET, CALLBACK_URL, reload_config
 
 # -----------------------------
 # OAuth subprocess bridge
@@ -42,17 +42,20 @@ def run_oauth_subprocess(redirect_url: str):
 def create_authenticated_client():
     """
     Create a Schwab client assuming valid tokens already exist.
+    Reloads config to ensure we have the latest credentials.
     """
+    reload_config()
+    from config_loader import APP_KEY, SECRET, CALLBACK_URL
+    if not APP_KEY or not APP_KEY.strip():
+        raise ValueError("APP_KEY cannot be None or empty. Please add API credentials first.")
+    if not SECRET or not SECRET.strip():
+        raise ValueError("SECRET cannot be None or empty. Please add API credentials first.")
     return schwabdev.Client(APP_KEY, SECRET, CALLBACK_URL)
 
 def schwab_tokens_exist():
     token_dir = os.path.expanduser("~/.schwabdev")
     token_db = os.path.join(token_dir, "tokens.db")
     return os.path.exists(token_db)
-
-
-def create_authenticated_client():
-    return schwabdev.Client(APP_KEY, SECRET, CALLBACK_URL)
 # -----------------------------
 # Token reset (Windows-safe)
 # -----------------------------

@@ -70,3 +70,11 @@ APP_KEY = _api_config["APP_KEY"]
 SECRET = _api_config["SECRET"]
 CALLBACK_URL = _api_config["CALLBACK_URL"]
 
+def reload_config():
+    """Reload API config from file and update module-level variables."""
+    global APP_KEY, SECRET, CALLBACK_URL, _api_config
+    _api_config = _load_api_config()
+    APP_KEY = _api_config["APP_KEY"]
+    SECRET = _api_config["SECRET"]
+    CALLBACK_URL = _api_config["CALLBACK_URL"]
+

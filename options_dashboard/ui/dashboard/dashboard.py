@@ -6,22 +6,13 @@ import datetime
 import os
 import json
 
+# Lightweight imports (always needed)
 from options_dashboard.config import MAX_TICKERS, PRESET_FILE
 from options_dashboard.state.ticker_state import TickerState
-from options_dashboard.data.schwab_api import fetch_stock_price, fetch_option_chain
-from options_dashboard.data.csv_loader import load_csv_index
-# from ui.dashboard_chart_logic import generate_selected_chart_impl
-from options_dashboard.data.schwab_auth import mark_schwab_reset
 from ui import dialogs
-from ui.dashboard.layout import build_layout
-from ui.dashboard.tabs import rebuild_tabs, create_stock_tab, update_table_for_symbol, on_expiration_change
-from ui.dashboard.data_controller import fetch_worker, fetch_all_stocks, load_csv_index_data
-from ui.dashboard.refresh import start_auto_refresh, auto_refresh_price, auto_refresh_options
-from ui.dashboard.charts_controller import generate_selected_chart, generate_chart_group
-from style.custom_theme_controller import register_theme_change_callback
-from ui.dashboard.single_stock_panel import build_single_stock_panel
-from ui.dashboard.stats_modal import open_stats_modal
-from ui.dashboard.charts_controller import _bring_chart_windows_to_front
+
+# Heavy imports deferred until needed (lazy loading)
+# These will be imported when methods are called
 
 
 class Dashboard(ctk.CTkFrame):
@@ -73,7 +64,14 @@ class Dashboard(ctk.CTkFrame):
         self.csv_symbol_var = tk.StringVar(value="SPX")
         self.csv_mode_var = tk.StringVar(value="Default File")
 
-        # ---- binding controllers ----
+        # ---- binding controllers (lazy import to speed up startup) ----
+        # Import heavy modules only when needed
+        from ui.dashboard.layout import build_layout
+        from ui.dashboard.tabs import rebuild_tabs, create_stock_tab, update_table_for_symbol, on_expiration_change
+        from ui.dashboard.data_controller import fetch_worker, fetch_all_stocks, load_csv_index_data
+        from ui.dashboard.refresh import start_auto_refresh, auto_refresh_price, auto_refresh_options
+        from ui.dashboard.charts_controller import generate_selected_chart, generate_chart_group, _bring_chart_windows_to_front
+        
         self.build_layout = build_layout.__get__(self)
         self.rebuild_tabs = rebuild_tabs.__get__(self)
         self.create_stock_tab = create_stock_tab.__get__(self)
@@ -97,6 +95,10 @@ class Dashboard(ctk.CTkFrame):
         self.pack(fill="both", expand=True)
         # Bind view methods BEFORE build_layout so toggle callback can use them
         from ui.dashboard.layout import show_multi_view, show_single_view
+        from style.custom_theme_controller import register_theme_change_callback
+        from ui.dashboard.single_stock_panel import build_single_stock_panel
+        from ui.dashboard.stats_modal import open_stats_modal
+        
         self.show_multi_view = show_multi_view.__get__(self)
         self.show_single_view = show_single_view.__get__(self)
         self.build_layout()
@@ -104,17 +106,13 @@ class Dashboard(ctk.CTkFrame):
         # Restore single_view_symbol if we restored data and were in single view
         if hasattr(self, '_restored_single_view_symbol') and self._restored_single_view_symbol:
             self.single_view_symbol = self._restored_single_view_symbol
-            print(f"[DASHBOARD INIT] Restored single_view_symbol: {self.single_view_symbol}")
         
         # Initialize view based on saved state
         from state.app_state import get_state_value
         saved_view_mode = get_state_value("view_mode", "multi")
-        print(f"[DASHBOARD INIT] Saved view_mode: {saved_view_mode}")
         if saved_view_mode == "single":
-            print(f"[DASHBOARD INIT] Calling show_single_view()")
             self.show_single_view()
         else:
-            print(f"[DASHBOARD INIT] Calling show_multi_view()")
             self.show_multi_view()
         register_theme_change_callback(self.rebuild)
         # Rebuild tabs will be called in show_multi_view if needed
@@ -350,10 +348,12 @@ class Dashboard(ctk.CTkFrame):
         update_layout()
 
     def open_stats(self):
+        from ui.dashboard.stats_modal import open_stats_modal
+        
         # Check if we're in single view mode
         is_single_view = (hasattr(self, 'single_view') and 
-                          self.single_view is not None and 
-                          self.single_view.winfo_viewable())
+                         self.single_view is not None and 
+                         self.single_view.winfo_viewable())
         
         if is_single_view:
             # Single view mode - use single_view_symbol

@@ -8,9 +8,13 @@ PROJECT_ROOT = os.path.abspath(
 )
 sys.path.insert(0, PROJECT_ROOT)
 
-from config_loader import APP_KEY, SECRET, CALLBACK_URL
+from config_loader import APP_KEY, SECRET, CALLBACK_URL, reload_config
 
 def main():
+    # Reload config to get latest credentials
+    reload_config()
+    from config_loader import APP_KEY, SECRET, CALLBACK_URL
+    
     redirect_url = sys.stdin.readline().strip()
     if not redirect_url:
         raise SystemExit("No redirect URL provided on stdin")
