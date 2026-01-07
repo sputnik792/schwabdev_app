@@ -1,8 +1,8 @@
 {
-  "kappa": 2.0,
-  "theta": 0.04,
-  "sigma_v": 0.3,
-  "rho": -0.7,
-  "simulation_days": 30,
+  "kappa": 4.0,
+  "theta": 0.063,
+  "sigma_v": 0.26,
+  "rho": -0.53,
+  "simulation_days": 2,
   "time_steps": 100
 }

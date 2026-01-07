@@ -5,18 +5,12 @@
 api_config.json
 test.py
 
-# Virtual environment
-venv/
-env/
-ENV/
-.venv
-
 # ignore all .jsons
 *.json
 # except for:
 !options_dashboard/import_themes/
 !options_dashboard/import_themes/*.json
 !options_dashboard/company_tickers.json
-!options_dashboard/models/data_analysis/settings/heston_params.json
+# !options_dashboard/models/data_analysis/settings/heston_params.json
 # !options_dashboard/US_stock_symbols.json
 # !options_dashboard/US_stock_symbols_verbose.json

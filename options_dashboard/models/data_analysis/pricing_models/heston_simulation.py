@@ -2,7 +2,7 @@ import numpy as np
 from scipy.stats import norm
 
 
-def simulate_heston_paths(S0, v0, T, r, q, kappa, theta, sigma_v, rho, n_steps, n_paths=1):
+def simulate_heston_paths(S0, v0, T, r, q, kappa, theta, sigma_v, rho, n_steps, n_paths=1, random_seed=None):
     """
     Simulate Heston model paths using Euler-Maruyama discretization.
     
@@ -18,12 +18,17 @@ def simulate_heston_paths(S0, v0, T, r, q, kappa, theta, sigma_v, rho, n_steps, 
     - rho: Correlation between price and variance
     - n_steps: Number of time steps
     - n_paths: Number of paths to simulate
+    - random_seed: Optional random seed for reproducibility (None = random each time)
     
     Returns:
     - times: Array of time points
     - S_paths: Stock price paths (n_paths x n_steps+1)
     - v_paths: Variance paths (n_paths x n_steps+1)
     """
+    # Set random seed if provided for reproducibility
+    if random_seed is not None:
+        np.random.seed(random_seed)
+    
     dt = T / n_steps
     times = np.linspace(0, T, n_steps + 1)
     

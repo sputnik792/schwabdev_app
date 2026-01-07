@@ -360,6 +360,44 @@ def open_heston_window(dashboard):
             pass  # Ignore errors when value is empty or invalid
     steps_var.trace("w", update_steps)
     
+    # Fixed seed option for reproducible results
+    seed_frame = ctk.CTkFrame(main_frame)
+    seed_frame.pack(pady=(20, 10))
+    
+    use_fixed_seed_var = ctk.BooleanVar(value=False)
+    seed_checkbox = ctk.CTkCheckBox(
+        seed_frame,
+        text="Use Fixed Seed (for reproducible results)",
+        variable=use_fixed_seed_var,
+        font=ctk.CTkFont(weight="bold")
+    )
+    seed_checkbox.pack(pady=(10, 5))
+    
+    seed_label = ctk.CTkLabel(
+        seed_frame,
+        text="Seed Value:",
+        font=ctk.CTkFont(weight="bold")
+    )
+    seed_label.pack(pady=(10, 5))
+    
+    seed_var = ctk.IntVar(value=42)
+    seed_entry = ctk.CTkEntry(
+        seed_frame,
+        textvariable=seed_var,
+        width=150,
+        state="disabled"  # Disabled by default
+    )
+    seed_entry.pack(pady=5)
+    
+    # Enable/disable seed entry based on checkbox
+    def toggle_seed_entry():
+        if use_fixed_seed_var.get():
+            seed_entry.configure(state="normal")
+        else:
+            seed_entry.configure(state="disabled")
+    
+    seed_checkbox.configure(command=toggle_seed_entry)
+    
     # Reset to defaults function
     def reset_to_defaults():
         """Reset all parameters to factory default values"""
@@ -377,6 +415,11 @@ def open_heston_window(dashboard):
         days_var.set(FACTORY_DEFAULTS["simulation_days"])
         steps_var.set(FACTORY_DEFAULTS["time_steps"])
         
+        # Reset seed checkbox and value
+        use_fixed_seed_var.set(False)
+        seed_var.set(42)
+        seed_entry.configure(state="disabled")
+        
         # Update labels
         params['kappa'][1].configure(text=f"{FACTORY_DEFAULTS['kappa']:.2f}")
         params['theta'][1].configure(text=f"{FACTORY_DEFAULTS['theta']:.4f}")
@@ -392,6 +435,225 @@ def open_heston_window(dashboard):
         # Save to JSON file
         save_heston_params(FACTORY_DEFAULTS.copy())
     
+    # Help button function
+    def show_help():
+        """Show help window explaining Heston model parameters"""
+        help_win = ctk.CTkToplevel(win)
+        help_win.title("Heston Model Parameters Help")
+        help_win.geometry("700x750")
+        help_win.resizable(True, True)
+        
+        # Center the window
+        help_win.update_idletasks()
+        screen_w = help_win.winfo_screenwidth()
+        screen_h = help_win.winfo_screenheight()
+        win_w = help_win.winfo_width()
+        win_h = help_win.winfo_height()
+        x = (screen_w // 2) - (win_w // 2)
+        y = (screen_h // 2) - (win_h // 2)
+        help_win.geometry(f"{win_w}x{win_h}+{x}+{y}")
+        
+        # Create scrollable frame
+        scrollable_frame = ctk.CTkScrollableFrame(help_win)
+        scrollable_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        # Title
+        title_label = ctk.CTkLabel(
+            scrollable_frame,
+            text="Heston Model Parameters Guide",
+            font=ctk.CTkFont(size=20, weight="bold")
+        )
+        title_label.pack(pady=(10, 20))
+        
+        # Helper function to create parameter sections
+        def add_parameter_section(name, symbol, description, range_text, details=""):
+            frame = ctk.CTkFrame(scrollable_frame)
+            frame.pack(fill="x", pady=10, padx=10)
+            
+            # Parameter name and symbol
+            header = ctk.CTkLabel(
+                frame,
+                text=f"{name} ({symbol})",
+                font=ctk.CTkFont(size=16, weight="bold")
+            )
+            header.pack(anchor="w", padx=15, pady=(15, 5))
+            
+            # Description
+            desc_label = ctk.CTkLabel(
+                frame,
+                text=description,
+                font=ctk.CTkFont(size=13),
+                wraplength=650,
+                justify="left"
+            )
+            desc_label.pack(anchor="w", padx=15, pady=(0, 5))
+            
+            # Ideal range
+            range_label = ctk.CTkLabel(
+                frame,
+                text=f"Ideal Range: {range_text}",
+                font=ctk.CTkFont(size=12, weight="bold"),
+                text_color=("#0066CC", "#4A9EFF")
+            )
+            range_label.pack(anchor="w", padx=15, pady=(5, 5))
+            
+            # Additional details if provided
+            if details:
+                details_label = ctk.CTkLabel(
+                    frame,
+                    text=details,
+                    font=ctk.CTkFont(size=12),
+                    wraplength=650,
+                    justify="left",
+                    text_color=("#666666", "#CCCCCC")
+                )
+                details_label.pack(anchor="w", padx=15, pady=(0, 15))
+            else:
+                # Add padding if no details
+                ctk.CTkLabel(frame, text="").pack(pady=(0, 15))
+        
+        # Kappa parameter
+        add_parameter_section(
+            "Kappa",
+            "κ",
+            "Mean reversion speed - controls how quickly volatility returns to its long-run average (theta). Higher values mean faster mean reversion. This parameter determines the 'memory' of the volatility process.",
+            "0.5 - 5.0 (typical: 1.0 - 3.0)",
+            "• Low κ (< 1.0): Volatility changes slowly, more persistent\n• High κ (> 3.0): Volatility reverts quickly to long-run level\n• Very high κ can cause numerical instability"
+        )
+        
+        # Theta parameter
+        add_parameter_section(
+            "Theta",
+            "θ",
+            "Long-run variance - the average variance that volatility tends to revert to over the long term. This is the 'equilibrium' level of variance in the model.",
+            "0.01 - 0.20 (typical: 0.02 - 0.10)",
+            "• Represents annualized variance (not volatility)\n• θ = 0.04 means long-run volatility ≈ 20% (√0.04 = 0.20)\n• Should match the asset's historical volatility characteristics"
+        )
+        
+        # Sigma_v parameter
+        add_parameter_section(
+            "Sigma_v",
+            "σ_v",
+            "Volatility of volatility (vol-of-vol) - controls how much the variance itself can fluctuate. Higher values create more volatility clustering and fat tails in returns.",
+            "0.1 - 0.8 (typical: 0.2 - 0.5)",
+            "• Low σ_v: Variance changes smoothly\n• High σ_v: Variance can spike dramatically (creates volatility smiles)\n• Too high (> 1.0) can violate Feller condition (2κθ > σ_v²)"
+        )
+        
+        # Rho parameter
+        add_parameter_section(
+            "Rho",
+            "ρ",
+            "Correlation between stock price and variance - determines the leverage effect. Negative values mean when stock price falls, volatility tends to increase (typical for equities).",
+            "-0.9 to -0.3 (typical: -0.5 to -0.7)",
+            "• ρ < 0: Negative correlation (equity markets)\n• ρ ≈ 0: No correlation\n• ρ > 0: Positive correlation (rare, some commodities)\n• Extreme values (|ρ| > 0.9) can cause numerical issues"
+        )
+        
+        # Kappa/Theta ratio section
+        ratio_frame = ctk.CTkFrame(scrollable_frame)
+        ratio_frame.pack(fill="x", pady=10, padx=10)
+        
+        ratio_header = ctk.CTkLabel(
+            ratio_frame,
+            text="Kappa/Theta Ratio (κ/θ)",
+            font=ctk.CTkFont(size=16, weight="bold")
+        )
+        ratio_header.pack(anchor="w", padx=15, pady=(15, 5))
+        
+        ratio_desc = ctk.CTkLabel(
+            ratio_frame,
+            text="The ratio of kappa to theta is important for understanding volatility dynamics:",
+            font=ctk.CTkFont(size=13),
+            wraplength=650,
+            justify="left"
+        )
+        ratio_desc.pack(anchor="w", padx=15, pady=(0, 10))
+        
+        ratio_points = [
+            "• High κ/θ ratio (> 50): Fast mean reversion, volatility quickly returns to long-run level",
+            "• Medium κ/θ ratio (10-50): Balanced behavior, typical for most equity markets",
+            "• Low κ/θ ratio (< 10): Slow mean reversion, volatility persists longer",
+            "• The ratio affects the shape of the volatility smile - higher ratios create steeper smiles"
+        ]
+        
+        for point in ratio_points:
+            point_label = ctk.CTkLabel(
+                ratio_frame,
+                text=point,
+                font=ctk.CTkFont(size=12),
+                wraplength=650,
+                justify="left",
+                anchor="w"
+            )
+            point_label.pack(anchor="w", padx=25, pady=2)
+        
+        ctk.CTkLabel(ratio_frame, text="").pack(pady=(0, 15))
+        
+        # Random Seed section
+        seed_frame = ctk.CTkFrame(scrollable_frame)
+        seed_frame.pack(fill="x", pady=10, padx=10)
+        
+        seed_header = ctk.CTkLabel(
+            seed_frame,
+            text="Random Seed",
+            font=ctk.CTkFont(size=16, weight="bold")
+        )
+        seed_header.pack(anchor="w", padx=15, pady=(15, 5))
+        
+        seed_desc = ctk.CTkLabel(
+            seed_frame,
+            text="The random seed controls the reproducibility of the Monte Carlo simulation:",
+            font=ctk.CTkFont(size=13),
+            wraplength=650,
+            justify="left"
+        )
+        seed_desc.pack(anchor="w", padx=15, pady=(0, 10))
+        
+        seed_points = [
+            "• Without fixed seed: Each simulation generates different random paths (default behavior)",
+            "• With fixed seed: Same seed + same parameters = identical simulation results",
+            "• Useful for: Comparing parameter changes, debugging, reproducible research",
+            "• Seed value: Any integer (default: 42). Different seeds produce different but valid paths",
+            "• Note: The volatility smile is deterministic and doesn't depend on the seed"
+        ]
+        
+        for point in seed_points:
+            point_label = ctk.CTkLabel(
+                seed_frame,
+                text=point,
+                font=ctk.CTkFont(size=12),
+                wraplength=650,
+                justify="left",
+                anchor="w"
+            )
+            point_label.pack(anchor="w", padx=25, pady=2)
+        
+        ctk.CTkLabel(seed_frame, text="").pack(pady=(0, 15))
+        
+        # Close button
+        close_btn = ctk.CTkButton(
+            scrollable_frame,
+            text="Close",
+            command=help_win.destroy,
+            width=150
+        )
+        close_btn.pack(pady=20)
+        
+        # Bring help window to front
+        help_win.lift()
+        help_win.focus()
+    
+    # Help button
+    help_btn = ctk.CTkButton(
+        main_frame,
+        text="Help",
+        command=show_help,
+        width=200,
+        height=35,
+        font=ctk.CTkFont(size=12),
+        fg_color=("gray70", "gray30")
+    )
+    help_btn.pack(pady=(5, 5))
+    
     # Reset button
     reset_btn = ctk.CTkButton(
         main_frame,
@@ -402,7 +664,7 @@ def open_heston_window(dashboard):
         font=ctk.CTkFont(size=12),
         fg_color=("gray70", "gray30")
     )
-    reset_btn.pack(pady=(10, 5))
+    reset_btn.pack(pady=(5, 5))
     
     # Generate button
     def generate_heston_chart():
@@ -466,8 +728,16 @@ def open_heston_window(dashboard):
             T_sim = n_days / 365.0
             
             # Simulate Heston paths
+            # Use fixed seed if checkbox is enabled, otherwise None for random results
+            random_seed = None
+            if use_fixed_seed_var.get():
+                try:
+                    random_seed = safe_get_int(seed_var, 42)
+                except (ValueError, tk.TclError):
+                    random_seed = 42  # Default seed if invalid
+            
             times, S_paths, v_paths = simulate_heston_paths(
-                S0, v0, T_sim, r, q, kappa, theta, sigma_v, rho, n_steps, n_paths=1
+                S0, v0, T_sim, r, q, kappa, theta, sigma_v, rho, n_steps, n_paths=1, random_seed=random_seed
             )
             
             # Convert times to days
@@ -568,10 +838,14 @@ def open_heston_window(dashboard):
             toolbar.update()
             canvas.get_tk_widget().pack(fill="both", expand=True)
             
-            # Bring window to front
+            # Bring window to front (but don't block other windows)
             chart_win.update_idletasks()
             chart_win.lift()
             chart_win.focus()
+            # Ensure it comes to front after rendering, but don't use grab_set or topmost
+            # This allows other windows to be accessed while still bringing this one forward
+            chart_win.after(50, lambda: chart_win.lift())
+            chart_win.after(150, lambda: chart_win.lift())
             
             # Save parameters after generating chart (in case they were changed)
             save_heston_params({
