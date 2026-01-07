@@ -128,13 +128,17 @@ def open_heston_window(dashboard):
     main_frame = ctk.CTkFrame(scrollable_frame)
     main_frame.pack(fill="both", expand=True)
     
-    # Title
+    # Header frame with title and help button
+    header_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+    header_frame.pack(fill="x", pady=(10, 20))
+    
+    # Title (left side)
     title_label = ctk.CTkLabel(
-        main_frame,
+        header_frame,
         text=f"Heston Model Configuration - {symbol}",
         font=ctk.CTkFont(size=16, weight="bold")
     )
-    title_label.pack(pady=(10, 20))
+    title_label.pack(side="left", padx=(0, 10))
     
     # Expiration info
     exp_label = ctk.CTkLabel(
@@ -440,7 +444,7 @@ def open_heston_window(dashboard):
         """Show help window explaining Heston model parameters"""
         help_win = ctk.CTkToplevel(win)
         help_win.title("Heston Model Parameters Help")
-        help_win.geometry("700x750")
+        help_win.geometry("600x550")
         help_win.resizable(True, True)
         
         # Center the window
@@ -452,6 +456,12 @@ def open_heston_window(dashboard):
         x = (screen_w // 2) - (win_w // 2)
         y = (screen_h // 2) - (win_h // 2)
         help_win.geometry(f"{win_w}x{win_h}+{x}+{y}")
+        
+        # Bring to front immediately
+        help_win.lift()
+        help_win.focus()
+        help_win.attributes("-topmost", True)
+        help_win.after(100, lambda: help_win.attributes("-topmost", False))
         
         # Create scrollable frame
         scrollable_frame = ctk.CTkScrollableFrame(help_win)
@@ -483,7 +493,7 @@ def open_heston_window(dashboard):
                 frame,
                 text=description,
                 font=ctk.CTkFont(size=13),
-                wraplength=650,
+                wraplength=550,
                 justify="left"
             )
             desc_label.pack(anchor="w", padx=15, pady=(0, 5))
@@ -503,7 +513,7 @@ def open_heston_window(dashboard):
                     frame,
                     text=details,
                     font=ctk.CTkFont(size=12),
-                    wraplength=650,
+                    wraplength=550,
                     justify="left",
                     text_color=("#666666", "#CCCCCC")
                 )
@@ -563,7 +573,7 @@ def open_heston_window(dashboard):
             ratio_frame,
             text="The ratio of kappa to theta is important for understanding volatility dynamics:",
             font=ctk.CTkFont(size=13),
-            wraplength=650,
+            wraplength=550,
             justify="left"
         )
         ratio_desc.pack(anchor="w", padx=15, pady=(0, 10))
@@ -580,7 +590,7 @@ def open_heston_window(dashboard):
                 ratio_frame,
                 text=point,
                 font=ctk.CTkFont(size=12),
-                wraplength=650,
+                wraplength=550,
                 justify="left",
                 anchor="w"
             )
@@ -603,7 +613,7 @@ def open_heston_window(dashboard):
             seed_frame,
             text="The random seed controls the reproducibility of the Monte Carlo simulation:",
             font=ctk.CTkFont(size=13),
-            wraplength=650,
+            wraplength=550,
             justify="left"
         )
         seed_desc.pack(anchor="w", padx=15, pady=(0, 10))
@@ -621,13 +631,96 @@ def open_heston_window(dashboard):
                 seed_frame,
                 text=point,
                 font=ctk.CTkFont(size=12),
-                wraplength=650,
+                wraplength=550,
                 justify="left",
                 anchor="w"
             )
             point_label.pack(anchor="w", padx=25, pady=2)
         
         ctk.CTkLabel(seed_frame, text="").pack(pady=(0, 15))
+        
+        # Simulation Period section
+        period_frame = ctk.CTkFrame(scrollable_frame)
+        period_frame.pack(fill="x", pady=10, padx=10)
+        
+        period_header = ctk.CTkLabel(
+            period_frame,
+            text="Simulation Period (Days)",
+            font=ctk.CTkFont(size=16, weight="bold")
+        )
+        period_header.pack(anchor="w", padx=15, pady=(15, 5))
+        
+        period_desc = ctk.CTkLabel(
+            period_frame,
+            text="The number of days into the future to simulate the stock price and volatility paths:",
+            font=ctk.CTkFont(size=13),
+            wraplength=550,
+            justify="left"
+        )
+        period_desc.pack(anchor="w", padx=15, pady=(0, 10))
+        
+        period_points = [
+            "• Typical range: 7-90 days (1 week to 3 months)",
+            "• Longer periods show more volatility mean reversion behavior",
+            "• Shorter periods focus on near-term dynamics",
+            "• Default: 30 days (approximately 1 month)",
+            "• The simulation shows how price and volatility evolve over this time horizon"
+        ]
+        
+        for point in period_points:
+            point_label = ctk.CTkLabel(
+                period_frame,
+                text=point,
+                font=ctk.CTkFont(size=12),
+                wraplength=550,
+                justify="left",
+                anchor="w"
+            )
+            point_label.pack(anchor="w", padx=25, pady=2)
+        
+        ctk.CTkLabel(period_frame, text="").pack(pady=(0, 15))
+        
+        # Time Steps section
+        steps_frame = ctk.CTkFrame(scrollable_frame)
+        steps_frame.pack(fill="x", pady=10, padx=10)
+        
+        steps_header = ctk.CTkLabel(
+            steps_frame,
+            text="Time Steps",
+            font=ctk.CTkFont(size=16, weight="bold")
+        )
+        steps_header.pack(anchor="w", padx=15, pady=(15, 5))
+        
+        steps_desc = ctk.CTkLabel(
+            steps_frame,
+            text="The number of discrete time steps used in the Monte Carlo simulation:",
+            font=ctk.CTkFont(size=13),
+            wraplength=550,
+            justify="left"
+        )
+        steps_desc.pack(anchor="w", padx=15, pady=(0, 10))
+        
+        steps_points = [
+            "• More steps = smoother, more accurate simulation (but slower)",
+            "• Fewer steps = faster computation but less precise paths",
+            "• Typical range: 50-200 steps",
+            "• Default: 100 steps (good balance of accuracy and speed)",
+            "• For daily simulation over 30 days, 100 steps ≈ 0.3 days per step",
+            "• Higher values recommended for longer simulation periods"
+        ]
+        
+        for point in steps_points:
+            point_label = ctk.CTkLabel(
+                steps_frame,
+                text=point,
+                font=ctk.CTkFont(size=12),
+                wraplength=550,
+                justify="left",
+                anchor="w"
+            )
+            point_label.pack(anchor="w", padx=25, pady=2)
+        
+        ctk.CTkLabel(steps_frame, text="").pack(pady=(0, 15))
         
         # Close button
         close_btn = ctk.CTkButton(
@@ -638,21 +731,21 @@ def open_heston_window(dashboard):
         )
         close_btn.pack(pady=20)
         
-        # Bring help window to front
-        help_win.lift()
-        help_win.focus()
+        # Bring help window to front (already done above, but ensure it stays)
+        help_win.after(50, lambda: help_win.lift())
+        help_win.after(150, lambda: help_win.lift())
     
-    # Help button
+    # Help button (in header, top right)
     help_btn = ctk.CTkButton(
-        main_frame,
+        header_frame,
         text="Help",
         command=show_help,
-        width=200,
-        height=35,
-        font=ctk.CTkFont(size=12),
+        width=80,
+        height=30,
+        font=ctk.CTkFont(size=11),
         fg_color=("gray70", "gray30")
     )
-    help_btn.pack(pady=(5, 5))
+    help_btn.pack(side="right")
     
     # Reset button
     reset_btn = ctk.CTkButton(
