@@ -475,6 +475,70 @@ def open_heston_window(dashboard):
         )
         title_label.pack(pady=(10, 20))
         
+        # Overview section
+        overview_frame = ctk.CTkFrame(scrollable_frame)
+        overview_frame.pack(fill="x", pady=10, padx=10)
+        
+        overview_header = ctk.CTkLabel(
+            overview_frame,
+            text="What is the Heston Model?",
+            font=ctk.CTkFont(size=18, weight="bold")
+        )
+        overview_header.pack(anchor="w", padx=15, pady=(15, 10))
+        
+        overview_text = (
+            "The Heston Stochastic Volatility Model is an advanced options pricing model that extends "
+            "the Black-Scholes model by allowing volatility to vary randomly over time. Unlike Black-Scholes "
+            "which assumes constant volatility, the Heston model treats volatility as a stochastic (random) "
+            "process that follows its own dynamics.\n\n"
+            "The model uses two correlated stochastic processes:\n"
+            "1. Stock price process - follows geometric Brownian motion with time-varying volatility\n"
+            "2. Variance process - follows a mean-reverting square-root process\n\n"
+            "This allows the model to capture real-world phenomena like:\n"
+            "• Volatility clustering (high volatility periods followed by high volatility)\n"
+            "• Volatility smiles and skews in options markets\n"
+            "• The leverage effect (negative correlation between price and volatility)\n"
+            "• Mean reversion of volatility to a long-run average"
+        )
+        
+        overview_label = ctk.CTkLabel(
+            overview_frame,
+            text=overview_text,
+            font=ctk.CTkFont(size=13),
+            wraplength=550,
+            justify="left"
+        )
+        overview_label.pack(anchor="w", padx=15, pady=(0, 10))
+        
+        uses_header = ctk.CTkLabel(
+            overview_frame,
+            text="What is it used for?",
+            font=ctk.CTkFont(size=16, weight="bold")
+        )
+        uses_header.pack(anchor="w", padx=15, pady=(15, 5))
+        
+        uses_text = (
+            "The Heston model is widely used in quantitative finance for:\n"
+            "• Pricing exotic options and structured products\n"
+            "• Calibrating to market implied volatility surfaces\n"
+            "• Risk management and volatility forecasting\n"
+            "• Understanding volatility dynamics and term structure\n"
+            "• Generating realistic price and volatility scenarios for stress testing"
+        )
+        
+        uses_label = ctk.CTkLabel(
+            overview_frame,
+            text=uses_text,
+            font=ctk.CTkFont(size=13),
+            wraplength=550,
+            justify="left"
+        )
+        uses_label.pack(anchor="w", padx=15, pady=(0, 15))
+        
+        # Separator
+        separator = ctk.CTkFrame(scrollable_frame, height=2, fg_color=("gray", "gray"))
+        separator.pack(fill="x", pady=15, padx=10)
+        
         # Helper function to create parameter sections
         def add_parameter_section(name, symbol, description, range_text, details=""):
             frame = ctk.CTkFrame(scrollable_frame)
