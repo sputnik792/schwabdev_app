@@ -2,6 +2,7 @@ import customtkinter as ctk
 import datetime
 import json
 import os
+import tkinter as tk
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -223,50 +224,70 @@ def open_heston_window(dashboard):
     rho_value_label.pack()
     params['rho'] = (rho_var, rho_value_label)
     
+    # Helper function to safely get IntVar value
+    def safe_get_int(var, default=0):
+        try:
+            value = var.get()
+            return int(value) if value != "" else default
+        except (ValueError, tk.TclError):
+            return default
+    
     # Update value labels when sliders change and save parameters
     def update_kappa_label(value):
         params['kappa'][1].configure(text=f"{value:.2f}")
-        save_heston_params({
-            "kappa": value,
-            "theta": theta_var.get(),
-            "sigma_v": sigma_v_var.get(),
-            "rho": rho_var.get(),
-            "simulation_days": days_var.get(),
-            "time_steps": steps_var.get()
-        })
+        try:
+            save_heston_params({
+                "kappa": value,
+                "theta": theta_var.get(),
+                "sigma_v": sigma_v_var.get(),
+                "rho": rho_var.get(),
+                "simulation_days": safe_get_int(days_var, default_days),
+                "time_steps": safe_get_int(steps_var, default_steps)
+            })
+        except (ValueError, tk.TclError):
+            pass  # Ignore errors when values are invalid
     
     def update_theta_label(value):
         params['theta'][1].configure(text=f"{value:.4f}")
-        save_heston_params({
-            "kappa": kappa_var.get(),
-            "theta": value,
-            "sigma_v": sigma_v_var.get(),
-            "rho": rho_var.get(),
-            "simulation_days": days_var.get(),
-            "time_steps": steps_var.get()
-        })
+        try:
+            save_heston_params({
+                "kappa": kappa_var.get(),
+                "theta": value,
+                "sigma_v": sigma_v_var.get(),
+                "rho": rho_var.get(),
+                "simulation_days": safe_get_int(days_var, default_days),
+                "time_steps": safe_get_int(steps_var, default_steps)
+            })
+        except (ValueError, tk.TclError):
+            pass
     
     def update_sigma_v_label(value):
         params['sigma_v'][1].configure(text=f"{value:.3f}")
-        save_heston_params({
-            "kappa": kappa_var.get(),
-            "theta": theta_var.get(),
-            "sigma_v": value,
-            "rho": rho_var.get(),
-            "simulation_days": days_var.get(),
-            "time_steps": steps_var.get()
-        })
+        try:
+            save_heston_params({
+                "kappa": kappa_var.get(),
+                "theta": theta_var.get(),
+                "sigma_v": value,
+                "rho": rho_var.get(),
+                "simulation_days": safe_get_int(days_var, default_days),
+                "time_steps": safe_get_int(steps_var, default_steps)
+            })
+        except (ValueError, tk.TclError):
+            pass
     
     def update_rho_label(value):
         params['rho'][1].configure(text=f"{value:.3f}")
-        save_heston_params({
-            "kappa": kappa_var.get(),
-            "theta": theta_var.get(),
-            "sigma_v": sigma_v_var.get(),
-            "rho": value,
-            "simulation_days": days_var.get(),
-            "time_steps": steps_var.get()
-        })
+        try:
+            save_heston_params({
+                "kappa": kappa_var.get(),
+                "theta": theta_var.get(),
+                "sigma_v": sigma_v_var.get(),
+                "rho": value,
+                "simulation_days": safe_get_int(days_var, default_days),
+                "time_steps": safe_get_int(steps_var, default_steps)
+            })
+        except (ValueError, tk.TclError):
+            pass
     
     kappa_slider.configure(command=update_kappa_label)
     theta_slider.configure(command=update_theta_label)
@@ -292,7 +313,7 @@ def open_heston_window(dashboard):
     # Save days when changed
     def update_days(*args):
         try:
-            value = days_var.get()
+            value = safe_get_int(days_var, default_days)
             if value > 0:
                 save_heston_params({
                     "kappa": kappa_var.get(),
@@ -300,10 +321,10 @@ def open_heston_window(dashboard):
                     "sigma_v": sigma_v_var.get(),
                     "rho": rho_var.get(),
                     "simulation_days": value,
-                    "time_steps": steps_var.get()
+                    "time_steps": safe_get_int(steps_var, default_steps)
                 })
-        except:
-            pass
+        except (ValueError, tk.TclError):
+            pass  # Ignore errors when value is empty or invalid
     days_var.trace("w", update_days)
     
     # Number of time steps
@@ -325,18 +346,18 @@ def open_heston_window(dashboard):
     # Save steps when changed
     def update_steps(*args):
         try:
-            value = steps_var.get()
+            value = safe_get_int(steps_var, default_steps)
             if value > 0:
                 save_heston_params({
                     "kappa": kappa_var.get(),
                     "theta": theta_var.get(),
                     "sigma_v": sigma_v_var.get(),
                     "rho": rho_var.get(),
-                    "simulation_days": days_var.get(),
+                    "simulation_days": safe_get_int(days_var, default_days),
                     "time_steps": value
                 })
-        except:
-            pass
+        except (ValueError, tk.TclError):
+            pass  # Ignore errors when value is empty or invalid
     steps_var.trace("w", update_steps)
     
     # Reset to defaults function
@@ -392,8 +413,14 @@ def open_heston_window(dashboard):
             theta = theta_var.get()
             sigma_v = sigma_v_var.get()
             rho = rho_var.get()
-            n_days = days_var.get()
-            n_steps = steps_var.get()
+            
+            # Safely get days and steps with validation
+            try:
+                n_days = safe_get_int(days_var, default_days)
+                n_steps = safe_get_int(steps_var, default_steps)
+            except (ValueError, tk.TclError):
+                dialogs.warning("Invalid Input", "Days and steps must be valid numbers.")
+                return
             
             if n_days <= 0 or n_steps <= 0:
                 dialogs.warning("Invalid Input", "Days and steps must be positive.")
