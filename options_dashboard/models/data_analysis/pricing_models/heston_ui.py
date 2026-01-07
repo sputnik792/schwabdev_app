@@ -34,7 +34,9 @@ FACTORY_DEFAULTS = {
     "sigma_v": 0.3,
     "rho": -0.7,
     "simulation_days": 30,
-    "time_steps": 100
+    "time_steps": 100,
+    "use_fixed_seed": False,
+    "seed_value": 42
 }
 
 def load_heston_params():
@@ -160,6 +162,8 @@ def open_heston_window(dashboard):
     default_rho = saved_params.get("rho", FACTORY_DEFAULTS["rho"])  # Correlation
     default_days = saved_params.get("simulation_days", FACTORY_DEFAULTS["simulation_days"])
     default_steps = saved_params.get("time_steps", FACTORY_DEFAULTS["time_steps"])
+    default_use_fixed_seed = saved_params.get("use_fixed_seed", FACTORY_DEFAULTS["use_fixed_seed"])
+    default_seed_value = saved_params.get("seed_value", FACTORY_DEFAULTS["seed_value"])
     
     # Parameter sliders
     params = {}
@@ -246,7 +250,9 @@ def open_heston_window(dashboard):
                 "sigma_v": sigma_v_var.get(),
                 "rho": rho_var.get(),
                 "simulation_days": safe_get_int(days_var, default_days),
-                "time_steps": safe_get_int(steps_var, default_steps)
+                "time_steps": safe_get_int(steps_var, default_steps),
+                "use_fixed_seed": use_fixed_seed_var.get(),
+                "seed_value": safe_get_int(seed_var, default_seed_value)
             })
         except (ValueError, tk.TclError):
             pass  # Ignore errors when values are invalid
@@ -260,7 +266,9 @@ def open_heston_window(dashboard):
                 "sigma_v": sigma_v_var.get(),
                 "rho": rho_var.get(),
                 "simulation_days": safe_get_int(days_var, default_days),
-                "time_steps": safe_get_int(steps_var, default_steps)
+                "time_steps": safe_get_int(steps_var, default_steps),
+                "use_fixed_seed": use_fixed_seed_var.get(),
+                "seed_value": safe_get_int(seed_var, default_seed_value)
             })
         except (ValueError, tk.TclError):
             pass
@@ -274,7 +282,9 @@ def open_heston_window(dashboard):
                 "sigma_v": value,
                 "rho": rho_var.get(),
                 "simulation_days": safe_get_int(days_var, default_days),
-                "time_steps": safe_get_int(steps_var, default_steps)
+                "time_steps": safe_get_int(steps_var, default_steps),
+                "use_fixed_seed": use_fixed_seed_var.get(),
+                "seed_value": safe_get_int(seed_var, default_seed_value)
             })
         except (ValueError, tk.TclError):
             pass
@@ -288,7 +298,9 @@ def open_heston_window(dashboard):
                 "sigma_v": sigma_v_var.get(),
                 "rho": value,
                 "simulation_days": safe_get_int(days_var, default_days),
-                "time_steps": safe_get_int(steps_var, default_steps)
+                "time_steps": safe_get_int(steps_var, default_steps),
+                "use_fixed_seed": use_fixed_seed_var.get(),
+                "seed_value": safe_get_int(seed_var, default_seed_value)
             })
         except (ValueError, tk.TclError):
             pass
@@ -325,7 +337,9 @@ def open_heston_window(dashboard):
                     "sigma_v": sigma_v_var.get(),
                     "rho": rho_var.get(),
                     "simulation_days": value,
-                    "time_steps": safe_get_int(steps_var, default_steps)
+                    "time_steps": safe_get_int(steps_var, default_steps),
+                    "use_fixed_seed": use_fixed_seed_var.get(),
+                    "seed_value": safe_get_int(seed_var, default_seed_value)
                 })
         except (ValueError, tk.TclError):
             pass  # Ignore errors when value is empty or invalid
@@ -358,7 +372,9 @@ def open_heston_window(dashboard):
                     "sigma_v": sigma_v_var.get(),
                     "rho": rho_var.get(),
                     "simulation_days": safe_get_int(days_var, default_days),
-                    "time_steps": value
+                    "time_steps": value,
+                    "use_fixed_seed": use_fixed_seed_var.get(),
+                    "seed_value": safe_get_int(seed_var, default_seed_value)
                 })
         except (ValueError, tk.TclError):
             pass  # Ignore errors when value is empty or invalid
@@ -368,7 +384,7 @@ def open_heston_window(dashboard):
     seed_frame = ctk.CTkFrame(main_frame)
     seed_frame.pack(pady=(20, 10))
     
-    use_fixed_seed_var = ctk.BooleanVar(value=False)
+    use_fixed_seed_var = ctk.BooleanVar(value=default_use_fixed_seed)
     seed_checkbox = ctk.CTkCheckBox(
         seed_frame,
         text="Use Fixed Seed (for reproducible results)",
@@ -384,23 +400,55 @@ def open_heston_window(dashboard):
     )
     seed_label.pack(pady=(10, 5))
     
-    seed_var = ctk.IntVar(value=42)
+    seed_var = ctk.IntVar(value=default_seed_value)
     seed_entry = ctk.CTkEntry(
         seed_frame,
         textvariable=seed_var,
         width=150,
-        state="disabled"  # Disabled by default
+        state="normal" if default_use_fixed_seed else "disabled"
     )
     seed_entry.pack(pady=5)
     
-    # Enable/disable seed entry based on checkbox
+    # Enable/disable seed entry based on checkbox and save when changed
     def toggle_seed_entry():
         if use_fixed_seed_var.get():
             seed_entry.configure(state="normal")
         else:
             seed_entry.configure(state="disabled")
+        # Save seed settings when checkbox changes
+        try:
+            save_heston_params({
+                "kappa": kappa_var.get(),
+                "theta": theta_var.get(),
+                "sigma_v": sigma_v_var.get(),
+                "rho": rho_var.get(),
+                "simulation_days": safe_get_int(days_var, default_days),
+                "time_steps": safe_get_int(steps_var, default_steps),
+                "use_fixed_seed": use_fixed_seed_var.get(),
+                "seed_value": safe_get_int(seed_var, default_seed_value)
+            })
+        except (ValueError, tk.TclError):
+            pass  # Ignore errors when values are invalid
     
     seed_checkbox.configure(command=toggle_seed_entry)
+    
+    # Save seed value when changed
+    def update_seed(*args):
+        try:
+            value = safe_get_int(seed_var, default_seed_value)
+            save_heston_params({
+                "kappa": kappa_var.get(),
+                "theta": theta_var.get(),
+                "sigma_v": sigma_v_var.get(),
+                "rho": rho_var.get(),
+                "simulation_days": safe_get_int(days_var, default_days),
+                "time_steps": safe_get_int(steps_var, default_steps),
+                "use_fixed_seed": use_fixed_seed_var.get(),
+                "seed_value": value
+            })
+        except (ValueError, tk.TclError):
+            pass  # Ignore errors when value is empty or invalid
+    seed_var.trace("w", update_seed)
     
     # Reset to defaults function
     def reset_to_defaults():
@@ -420,9 +468,9 @@ def open_heston_window(dashboard):
         steps_var.set(FACTORY_DEFAULTS["time_steps"])
         
         # Reset seed checkbox and value
-        use_fixed_seed_var.set(False)
-        seed_var.set(42)
-        seed_entry.configure(state="disabled")
+        use_fixed_seed_var.set(FACTORY_DEFAULTS["use_fixed_seed"])
+        seed_var.set(FACTORY_DEFAULTS["seed_value"])
+        seed_entry.configure(state="normal" if FACTORY_DEFAULTS["use_fixed_seed"] else "disabled")
         
         # Update labels
         params['kappa'][1].configure(text=f"{FACTORY_DEFAULTS['kappa']:.2f}")
@@ -1011,7 +1059,9 @@ def open_heston_window(dashboard):
                 "sigma_v": sigma_v,
                 "rho": rho,
                 "simulation_days": n_days,
-                "time_steps": n_steps
+                "time_steps": n_steps,
+                "use_fixed_seed": use_fixed_seed_var.get(),
+                "seed_value": safe_get_int(seed_var, default_seed_value)
             })
             
         except Exception as e:
