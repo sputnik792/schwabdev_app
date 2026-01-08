@@ -953,11 +953,14 @@ def open_heston_window(dashboard):
             
             v0 = np.mean([iv**2 for iv in ivs])  # Initial variance
             
-            # Show progress dialog
+            # Show progress dialog (light red background for in-progress)
             progress_win = ctk.CTkToplevel(win)
             progress_win.title("Calibrating Heston Parameters")
             progress_win.geometry("400x150")
             progress_win.resizable(False, False)
+            
+            # Set light red background for in-progress dialog
+            progress_win.configure(fg_color="#ffe6e6")
             
             # Center the window
             progress_win.update_idletasks()
@@ -972,7 +975,8 @@ def open_heston_window(dashboard):
             progress_label = ctk.CTkLabel(
                 progress_win,
                 text="Calibrating parameters to market prices...\nThis may take a minute.",
-                font=ctk.CTkFont(size=12)
+                font=ctk.CTkFont(size=12),
+                fg_color="#ffe6e6"
             )
             progress_label.pack(pady=20)
             
@@ -983,7 +987,8 @@ def open_heston_window(dashboard):
             status_label = ctk.CTkLabel(
                 progress_win,
                 text="Starting optimization...",
-                font=ctk.CTkFont(size=11)
+                font=ctk.CTkFont(size=11),
+                fg_color="#ffe6e6"
             )
             status_label.pack(pady=5)
             
@@ -1029,6 +1034,10 @@ def open_heston_window(dashboard):
                     def update_ui_with_results():
                         progress_bar.set(1.0)
                         status_label.configure(text="Calibration complete!")
+                        # Change to light green background for completion
+                        progress_win.configure(fg_color="#e6ffe6")
+                        progress_label.configure(fg_color="#e6ffe6")
+                        status_label.configure(fg_color="#e6ffe6")
                         progress_win.update()
                         progress_win.after(500, progress_win.destroy)
                         

@@ -253,7 +253,7 @@ def manual_refresh_all_tickers(dashboard):
         
         def close_dialog():
             fetching_dialog.destroy()
-            dialogs.show_timed_message(dashboard.root, "Refresh Complete", f"Refreshed {refreshed_count} ticker(s)", duration=2000)
+            dialogs.show_timed_message(dashboard.root, "Refresh Complete", f"Refreshed {refreshed_count} ticker(s)", duration_ms=2000)
         
         dashboard.root.after(0, close_dialog)
     

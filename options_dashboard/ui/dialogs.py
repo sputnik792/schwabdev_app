@@ -20,6 +20,9 @@ def show_timed_message(root, title, message, duration_ms=3000):
     dialog.title(title)
     dialog.geometry("450x150")
     dialog.resizable(False, False)
+    
+    # Light green background for completion messages
+    dialog.configure(bg="#e6ffe6")
 
     # Make dialog stay on top
     dialog.attributes("-topmost", True)
@@ -38,11 +41,16 @@ def show_timed_message(root, title, message, duration_ms=3000):
     y = (screen_h // 2) - (win_h // 2)
     dialog.geometry(f"{win_w}x{win_h}+{x}+{y}")
 
+    # Create a frame with the background color
+    frame = tk.Frame(dialog, bg="#e6ffe6")
+    frame.pack(fill="both", expand=True)
+    
     label = ttk.Label(
-        dialog, 
+        frame, 
         text=message, 
         wraplength=420,
-        font=("Segoe UI", 12)
+        font=("Segoe UI", 12),
+        background="#e6ffe6"
     )
     label.pack(expand=True, fill="both", padx=15, pady=15)
     dialog.update_idletasks()
@@ -72,6 +80,9 @@ def show_fetching_dialog(root, title="Fetching", message="Fetching options data.
     dialog.title(title)
     dialog.geometry("450x150")
     dialog.resizable(False, False)
+    
+    # Light red background for in-progress messages
+    dialog.configure(bg="#ffe6e6")
 
     dialog.update_idletasks()
 
@@ -85,11 +96,16 @@ def show_fetching_dialog(root, title="Fetching", message="Fetching options data.
     y = (screen_h // 2) - (win_h // 2)
     dialog.geometry(f"{win_w}x{win_h}+{x}+{y}")
 
+    # Create a frame with the background color
+    frame = tk.Frame(dialog, bg="#ffe6e6")
+    frame.pack(fill="both", expand=True)
+    
     label = ttk.Label(
-        dialog, 
+        frame, 
         text=message, 
         wraplength=420,
-        font=("Segoe UI", 12)
+        font=("Segoe UI", 12),
+        background="#ffe6e6"
     )
     label.pack(expand=True, fill="both", padx=15, pady=15)
     dialog.update_idletasks()
