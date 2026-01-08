@@ -2,6 +2,7 @@ import customtkinter as ctk
 import datetime
 import json
 import os
+import threading
 import tkinter as tk
 import numpy as np
 import pandas as pd
@@ -10,7 +11,10 @@ from pathlib import Path
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
 
-from models.data_analysis.pricing_models.heston import heston_call_price
+from models.data_analysis.pricing_models.heston import (
+    heston_call_price,
+    calibrate_heston_parameters
+)
 from models.data_analysis.pricing_models.heston_simulation import (
     simulate_heston_paths,
     calculate_implied_volatility_smile
@@ -858,6 +862,275 @@ def open_heston_window(dashboard):
         fg_color=("gray70", "gray30")
     )
     help_btn.pack(side="right")
+    
+    # Calibration function
+    def calibrate_parameters():
+        """Calibrate Heston parameters to market option prices"""
+        try:
+            # Get market data
+            S0 = state.price
+            T_exp = time_to_expiration(exp)
+            r = RISK_FREE_RATE
+            q = DIVIDEND_YIELD
+            
+            if S0 <= 0 or T_exp <= 0:
+                dialogs.warning("Invalid Data", "Invalid spot price or expiration date.")
+                return
+            
+            # Get option data
+            df = state.exp_data_map[exp]
+            if df is None or df.empty:
+                dialogs.warning("No Data", "No options data available for this expiration.")
+                return
+            
+            # Extract strikes and market prices
+            strikes = []
+            market_prices = []
+            
+            for row in df.itertuples(index=False):
+                K = float(row.Strike) if hasattr(row, 'Strike') else 0
+                if K <= 0:
+                    continue
+                
+                # Try to get mid price (average of bid and ask)
+                call_bid = float(getattr(row, 'Bid_Call', 0) or 0)
+                call_ask = float(getattr(row, 'Ask_Call', 0) or 0)
+                put_bid = float(getattr(row, 'Bid_Put', 0) or 0)
+                put_ask = float(getattr(row, 'Ask_Put', 0) or 0)
+                
+                # Use call if available, otherwise put
+                if call_bid > 0 and call_ask > 0:
+                    mid_price = (call_bid + call_ask) / 2.0
+                    if mid_price > 0:
+                        strikes.append(K)
+                        market_prices.append(mid_price)
+                elif put_bid > 0 and put_ask > 0:
+                    mid_price = (put_bid + put_ask) / 2.0
+                    if mid_price > 0:
+                        strikes.append(K)
+                        market_prices.append(mid_price)
+            
+            if len(strikes) < 3:
+                dialogs.warning(
+                    "Insufficient Data",
+                    f"Need at least 3 option prices for calibration.\n"
+                    f"Found {len(strikes)} valid prices."
+                )
+                return
+            
+            # Filter to reasonable range around current price (0.7x to 1.3x)
+            filtered_strikes = []
+            filtered_prices = []
+            for K, price in zip(strikes, market_prices):
+                if 0.7 * S0 <= K <= 1.3 * S0:
+                    filtered_strikes.append(K)
+                    filtered_prices.append(price)
+            
+            if len(filtered_strikes) < 3:
+                dialogs.warning(
+                    "Insufficient Data",
+                    "Not enough options in reasonable strike range (70%-130% of spot)."
+                )
+                return
+            
+            # Calculate initial variance from ATM IV
+            ivs = []
+            for row in df.itertuples(index=False):
+                call_iv = float(getattr(row, 'IV_Call', 0) or 0)
+                put_iv = float(getattr(row, 'IV_Put', 0) or 0)
+                if call_iv > 1:
+                    call_iv /= 100.0
+                if put_iv > 1:
+                    put_iv /= 100.0
+                if call_iv > 0:
+                    ivs.append(call_iv)
+                if put_iv > 0:
+                    ivs.append(put_iv)
+            
+            if not ivs:
+                dialogs.warning("No Data", "No implied volatility data available for initial variance.")
+                return
+            
+            v0 = np.mean([iv**2 for iv in ivs])  # Initial variance
+            
+            # Show progress dialog
+            progress_win = ctk.CTkToplevel(win)
+            progress_win.title("Calibrating Heston Parameters")
+            progress_win.geometry("400x150")
+            progress_win.resizable(False, False)
+            
+            # Center the window
+            progress_win.update_idletasks()
+            screen_w = progress_win.winfo_screenwidth()
+            screen_h = progress_win.winfo_screenheight()
+            win_w = progress_win.winfo_width()
+            win_h = progress_win.winfo_height()
+            x = (screen_w // 2) - (win_w // 2)
+            y = (screen_h // 2) - (win_h // 2)
+            progress_win.geometry(f"{win_w}x{win_h}+{x}+{y}")
+            
+            progress_label = ctk.CTkLabel(
+                progress_win,
+                text="Calibrating parameters to market prices...\nThis may take a minute.",
+                font=ctk.CTkFont(size=12)
+            )
+            progress_label.pack(pady=20)
+            
+            progress_bar = ctk.CTkProgressBar(progress_win, width=300)
+            progress_bar.pack(pady=10)
+            progress_bar.set(0)
+            
+            status_label = ctk.CTkLabel(
+                progress_win,
+                text="Starting optimization...",
+                font=ctk.CTkFont(size=11)
+            )
+            status_label.pack(pady=5)
+            
+            progress_win.update()
+            
+            # Track iteration count for progress
+            iteration_count = [0]
+            max_iterations = 200
+            
+            def update_progress(xk):
+                """Callback to update progress during optimization"""
+                iteration_count[0] += 1
+                progress = min(iteration_count[0] / max_iterations, 0.95)  # Cap at 95% until done
+                progress_bar.set(progress)
+                status_label.configure(text=f"Iteration {iteration_count[0]}...")
+                progress_win.update()
+            
+            # Run calibration in a separate thread to avoid blocking UI
+            def run_calibration():
+                try:
+                    # Get current parameter values as initial guess
+                    kappa_init = kappa_var.get()
+                    theta_init = theta_var.get()
+                    sigma_v_init = sigma_v_var.get()
+                    rho_init = rho_var.get()
+                    
+                    result = calibrate_heston_parameters(
+                        S0=S0,
+                        strikes=filtered_strikes,
+                        market_prices=filtered_prices,
+                        T=T_exp,
+                        r=r,
+                        q=q,
+                        v0=v0,
+                        kappa_init=kappa_init,
+                        theta_init=theta_init,
+                        sigma_v_init=sigma_v_init,
+                        rho_init=rho_init,
+                        callback=update_progress
+                    )
+                    
+                    # Update UI with fitted parameters
+                    def update_ui_with_results():
+                        progress_bar.set(1.0)
+                        status_label.configure(text="Calibration complete!")
+                        progress_win.update()
+                        progress_win.after(500, progress_win.destroy)
+                        
+                        if result['success']:
+                            # Update parameter sliders
+                            kappa_var.set(result['kappa'])
+                            theta_var.set(result['theta'])
+                            sigma_v_var.set(result['sigma_v'])
+                            rho_var.set(result['rho'])
+                            
+                            # Update labels
+                            params['kappa'][1].configure(text=f"{result['kappa']:.4f}")
+                            params['theta'][1].configure(text=f"{result['theta']:.6f}")
+                            params['sigma_v'][1].configure(text=f"{result['sigma_v']:.4f}")
+                            params['rho'][1].configure(text=f"{result['rho']:.4f}")
+                            
+                            # Save fitted parameters
+                            save_heston_params({
+                                "kappa": result['kappa'],
+                                "theta": result['theta'],
+                                "sigma_v": result['sigma_v'],
+                                "rho": result['rho'],
+                                "simulation_days": safe_get_int(days_var, default_days),
+                                "time_steps": safe_get_int(steps_var, default_steps),
+                                "use_fixed_seed": use_fixed_seed_var.get(),
+                                "seed_value": safe_get_int(seed_var, default_seed_value)
+                            })
+                            
+                            # Show success message
+                            dialogs.info(
+                                "Calibration Complete",
+                                f"Fitted parameters:\n\n"
+                                f"κ (Kappa): {result['kappa']:.4f}\n"
+                                f"θ (Theta): {result['theta']:.6f}\n"
+                                f"σ_v (Sigma_v): {result['sigma_v']:.4f}\n"
+                                f"ρ (Rho): {result['rho']:.4f}\n\n"
+                                f"Final error: {result['fun']:.6f}\n"
+                                f"Iterations: {result.get('nit', 'N/A')}"
+                            )
+                        else:
+                            dialogs.warning(
+                                "Calibration Warning",
+                                f"Optimization did not fully converge:\n\n"
+                                f"{result.get('message', 'Unknown error')}\n\n"
+                                f"Results may still be usable. Check the fitted parameters."
+                            )
+                            
+                            # Still update parameters even if not fully converged
+                            kappa_var.set(result['kappa'])
+                            theta_var.set(result['theta'])
+                            sigma_v_var.set(result['sigma_v'])
+                            rho_var.set(result['rho'])
+                            
+                            params['kappa'][1].configure(text=f"{result['kappa']:.4f}")
+                            params['theta'][1].configure(text=f"{result['theta']:.6f}")
+                            params['sigma_v'][1].configure(text=f"{result['sigma_v']:.4f}")
+                            params['rho'][1].configure(text=f"{result['rho']:.4f}")
+                            
+                            save_heston_params({
+                                "kappa": result['kappa'],
+                                "theta": result['theta'],
+                                "sigma_v": result['sigma_v'],
+                                "rho": result['rho'],
+                                "simulation_days": safe_get_int(days_var, default_days),
+                                "time_steps": safe_get_int(steps_var, default_steps),
+                                "use_fixed_seed": use_fixed_seed_var.get(),
+                                "seed_value": safe_get_int(seed_var, default_seed_value)
+                            })
+                    
+                    win.after(0, update_ui_with_results)
+                    
+                except Exception as e:
+                    def show_error():
+                        progress_win.destroy()
+                        dialogs.error(
+                            "Calibration Error",
+                            f"Failed to calibrate parameters:\n\n{str(e)}\n\n"
+                            "Please check that:\n"
+                            "- Option data is valid\n"
+                            "- Strikes and prices are reasonable\n"
+                            "- Initial parameters are within bounds"
+                        )
+                    win.after(0, show_error)
+            
+            # Run calibration in thread to avoid blocking
+            calibration_thread = threading.Thread(target=run_calibration, daemon=True)
+            calibration_thread.start()
+            
+        except Exception as e:
+            dialogs.error("Calibration Error", f"Failed to start calibration:\n\n{str(e)}")
+    
+    # Calibrate button
+    calibrate_btn = ctk.CTkButton(
+        main_frame,
+        text="Calibrate to Market Data",
+        command=calibrate_parameters,
+        width=200,
+        height=35,
+        font=ctk.CTkFont(size=12),
+        fg_color=("green", "darkgreen")
+    )
+    calibrate_btn.pack(pady=(5, 5))
     
     # Reset button
     reset_btn = ctk.CTkButton(
