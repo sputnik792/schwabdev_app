@@ -598,7 +598,7 @@ class Dashboard(ctk.CTkFrame):
         # Create window
         win = ctk.CTkToplevel(self.root)
         win.title("Group Settings")
-        win.geometry("800x600")
+        win.geometry("1000x600")  # Wider to accommodate sidebar
         win.resizable(True, True)
         
         # Center the window
@@ -625,9 +625,53 @@ class Dashboard(ctk.CTkFrame):
         win.bind("<FocusIn>", keep_in_front)
         win.bind("<Map>", keep_in_front)  # When window is shown
         
-        # Main container with scrollbars
-        main_frame = ctk.CTkFrame(win)
-        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        # Main container with sidebar and content area
+        main_container = ctk.CTkFrame(win)
+        main_container.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # Sidebar on the left
+        sidebar = ctk.CTkFrame(main_container, width=200)
+        sidebar.pack(side="left", fill="y", padx=(0, 10))
+        sidebar.pack_propagate(False)
+        
+        # Chart Group Generator dropdown
+        ctk.CTkLabel(
+            sidebar,
+            text="Settings",
+            font=ctk.CTkFont(size=14, weight="bold")
+        ).pack(pady=(20, 10), padx=10)
+        
+        # Load current mode from app state
+        current_mode = get_state_value("chart_group_mode", "Build All")
+        
+        chart_group_mode_var = tk.StringVar(value=current_mode)
+        
+        def on_mode_change(value):
+            """Save mode when changed"""
+            set_state_value("chart_group_mode", value)
+        
+        chart_group_dropdown = ctk.CTkOptionMenu(
+            sidebar,
+            variable=chart_group_mode_var,
+            values=["Build All", "Build Missing Dates Only"],
+            command=on_mode_change,
+            width=180
+        )
+        chart_group_dropdown.pack(pady=(0, 20), padx=10)
+        
+        # Info text
+        info_text = ctk.CTkLabel(
+            sidebar,
+            text="Build All: Generates all charts based on group settings\n\nBuild Missing Dates Only: Only generates charts for symbol/date combinations that don't already exist",
+            font=ctk.CTkFont(size=11),
+            justify="left",
+            wraplength=180
+        )
+        info_text.pack(pady=10, padx=10)
+        
+        # Main content area with scrollbars
+        main_frame = ctk.CTkFrame(main_container)
+        main_frame.pack(side="left", fill="both", expand=True)
         
         # Get background color for canvas (handle tuple for light/dark mode)
         bg_color_tuple = main_frame.cget("fg_color")

@@ -267,6 +267,56 @@ def generate_chart_group(self):
     # Load group settings
     group_settings = get_state_value("group_settings", {})
     
+    # Load chart group mode (default to "Build All")
+    chart_group_mode = get_state_value("chart_group_mode", "Build All")
+    
+    # Get existing chart windows if in "Build Missing Dates Only" mode
+    existing_charts = set()
+    if chart_group_mode == "Build Missing Dates Only":
+        # Collect all existing chart windows and extract their ticker/expiration pairs
+        all_chart_windows = []
+        
+        # Collect tracked windows
+        if hasattr(self, '_chart_windows') and self._chart_windows:
+            for win in self._chart_windows:
+                try:
+                    if win.winfo_exists():
+                        all_chart_windows.append(win)
+                except:
+                    pass
+        
+        # Collect untracked chart windows
+        try:
+            for child in self.root.winfo_children():
+                if isinstance(child, ctk.CTkToplevel):
+                    try:
+                        if child.winfo_exists():
+                            title = child.title()
+                            if any(keyword in title for keyword in ["Exposure", "Heston", "Analysis", "Chart"]):
+                                all_chart_windows.append(child)
+                    except:
+                        pass
+        except:
+            pass
+        
+        # Extract ticker and expiration from window titles
+        # Format: "SYMBOL Model Exposure - DATE | TIME" or "SYMBOL Heston Model Analysis - DATE | TIME"
+        for win in all_chart_windows:
+            try:
+                if win.winfo_exists():
+                    title = win.title()
+                    # Parse title to extract symbol and date
+                    # Titles typically have format: "SYMBOL ... - DATE | TIME"
+                    if " - " in title:
+                        parts = title.split(" - ")
+                        if len(parts) >= 2:
+                            symbol_part = parts[0].split()[0]  # First word is symbol
+                            date_part = parts[1].split(" |")[0].strip()  # Date before "|"
+                            # Create a key for this chart
+                            existing_charts.add((symbol_part, date_part))
+            except:
+                pass
+    
     for symbol, ui in self.ticker_tabs.items():
         if symbol not in self.ticker_data:
             skipped += 1
@@ -310,6 +360,16 @@ def generate_chart_group(self):
             if pair_key in generated_pairs:
                 # Skip if we've already generated this pair
                 continue
+            
+            # In "Build Missing Dates Only" mode, check if chart already exists
+            if chart_group_mode == "Build Missing Dates Only":
+                # Extract date from expiration string (format: "YYYY-MM-DD:...")
+                exp_date = exp.split(":")[0] if ":" in exp else exp
+                chart_key = (symbol, exp_date)
+                if chart_key in existing_charts:
+                    # Chart already exists, skip it
+                    skipped += 1
+                    continue
             
             if exp not in state.exp_data_map or state.exp_data_map[exp].empty:
                 continue
