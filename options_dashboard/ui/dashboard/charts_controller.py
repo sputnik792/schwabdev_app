@@ -649,3 +649,57 @@ def focus_ticker_charts(self, symbol):
     # Update focus bar after focusing
     if hasattr(self, 'update_focus_bar'):
         self.update_focus_bar()
+
+def close_ticker_charts(self, symbol):
+    """Close all chart windows for a specific ticker symbol"""
+    closed_count = 0
+    
+    # Collect all chart windows
+    all_chart_windows = []
+    
+    # Collect tracked windows
+    if hasattr(self, '_chart_windows') and self._chart_windows:
+        for win in self._chart_windows[:]:  # Use slice copy
+            try:
+                if win.winfo_exists():
+                    all_chart_windows.append(win)
+            except:
+                pass
+    
+    # Collect untracked chart windows
+    try:
+        for child in self.root.winfo_children():
+            if isinstance(child, ctk.CTkToplevel):
+                try:
+                    if child.winfo_exists():
+                        title = child.title()
+                        if any(keyword in title for keyword in ["Exposure", "Heston", "Analysis", "Chart"]):
+                            all_chart_windows.append(child)
+                except:
+                    pass
+    except:
+        pass
+    
+    # Close windows for the target ticker
+    for win in all_chart_windows:
+        try:
+            if win.winfo_exists():
+                title = win.title()
+                # Check if this window is for the target ticker
+                if title.startswith(symbol + " ") or title.startswith(symbol + "-"):
+                    win.destroy()
+                    closed_count += 1
+                    # Remove from tracked list if it was there
+                    if hasattr(self, '_chart_windows') and win in self._chart_windows:
+                        self._chart_windows.remove(win)
+        except:
+            pass
+    
+    # Update button states after closing
+    update_clear_graphs_button_state(self)
+    
+    # Update focus bar after closing
+    if hasattr(self, 'update_focus_bar'):
+        self.update_focus_bar()
+    
+    return closed_count

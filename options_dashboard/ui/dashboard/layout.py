@@ -547,7 +547,7 @@ def build_sidebar(self):
     self.root.after(1000, periodic_button_update)
     
     # Focus bar for ticker symbols with active graphs
-    from ui.dashboard.charts_controller import get_tickers_with_charts, focus_ticker_charts
+    from ui.dashboard.charts_controller import get_tickers_with_charts, focus_ticker_charts, close_ticker_charts
     
     # Label for focus bar
     ctk.CTkLabel(
@@ -593,6 +593,32 @@ def build_sidebar(self):
                     """Create a closure to handle focus for a specific ticker"""
                     return lambda: focus_ticker_charts(self, symbol)
                 
+                def make_right_click_handler(symbol):
+                    """Create a closure to handle right-click context menu for a specific ticker"""
+                    def show_context_menu(event):
+                        # Create context menu
+                        context_menu = tk.Menu(self.root, tearoff=0)
+                        
+                        # Add menu items
+                        context_menu.add_command(
+                            label="Merge to new window",
+                            command=lambda: None  # Placeholder - do nothing for now
+                        )
+                        context_menu.add_separator()
+                        context_menu.add_command(
+                            label="Close all windows",
+                            command=lambda: close_ticker_charts(self, symbol)
+                        )
+                        
+                        # Show menu at cursor position
+                        try:
+                            context_menu.tk_popup(event.x_root, event.y_root)
+                        finally:
+                            # Make sure to release the menu on release
+                            context_menu.grab_release()
+                    
+                    return show_context_menu
+                
                 btn = ctk.CTkButton(
                     self.focus_bar_buttons_frame,
                     text=ticker,
@@ -603,6 +629,15 @@ def build_sidebar(self):
                     corner_radius=6
                 )
                 btn.pack(side="left", padx=3)
+                
+                # Bind right-click event to show context menu
+                # Use the underlying tkinter widget for proper event binding
+                btn.bind("<Button-3>", make_right_click_handler(ticker))  # Button-3 is right-click
+                # Also bind to the underlying canvas widget if needed
+                try:
+                    btn._canvas.bind("<Button-3>", make_right_click_handler(ticker))
+                except:
+                    pass
         else:
             # Show placeholder when no charts
             placeholder = ctk.CTkLabel(
