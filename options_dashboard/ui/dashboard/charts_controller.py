@@ -182,6 +182,10 @@ def generate_selected_chart(self, spot_override=None):
         # Store window reference
         self._chart_windows.append(win)
         
+        # Update clear graphs button state
+        if hasattr(self, 'update_clear_graphs_button_state'):
+            self.update_clear_graphs_button_state()
+        
         # Embed the chart
         embed_matplotlib_chart(
             win,
@@ -399,6 +403,11 @@ def generate_chart_group(self):
                         except:
                             pass
             self.root.after(100, keep_charts_front)
+            
+            # Update clear graphs button state after charts are created
+            if hasattr(self, 'update_clear_graphs_button_state'):
+                self.update_clear_graphs_button_state()
+            
             # After dialog closes, remove transient so main window can come forward when clicked
             def remove_transient_after_dialog():
                 if hasattr(self, '_chart_windows') and self._chart_windows:
@@ -448,4 +457,76 @@ def _bring_chart_windows_to_front(self):
                     win.lift()
                     win.focus()
             except:
-                pass  # Window may have been closed
+                pass
+
+def close_all_chart_windows(self):
+    """Close all active chart windows and clean up the tracking list"""
+    if hasattr(self, '_chart_windows'):
+        # Close all windows that still exist
+        for win in self._chart_windows[:]:  # Use slice copy to avoid modification during iteration
+            try:
+                if win.winfo_exists():
+                    win.destroy()
+            except:
+                pass
+        # Clear the list
+        self._chart_windows.clear()
+    
+    # Also check for any other chart windows (like Heston charts) by checking root's children
+    # Find all CTkToplevel windows that look like chart windows
+    try:
+        for child in self.root.winfo_children():
+            if isinstance(child, ctk.CTkToplevel):
+                # Check if it's a chart window by title patterns
+                title = child.title()
+                if any(keyword in title for keyword in ["Exposure", "Heston", "Analysis", "Chart"]):
+                    try:
+                        if child.winfo_exists():
+                            child.destroy()
+                    except:
+                        pass
+    except:
+        pass
+    
+    # Update button state after closing
+    update_clear_graphs_button_state(self)
+
+def has_active_chart_windows(self):
+    """Check if there are any active chart windows"""
+    # Check tracked windows
+    if hasattr(self, '_chart_windows') and self._chart_windows:
+        # Clean up dead windows first
+        active_windows = []
+        for win in self._chart_windows:
+            try:
+                if win.winfo_exists():
+                    active_windows.append(win)
+            except:
+                pass
+        self._chart_windows[:] = active_windows
+        if active_windows:
+            return True
+    
+    # Also check for untracked chart windows (like Heston charts)
+    try:
+        for child in self.root.winfo_children():
+            if isinstance(child, ctk.CTkToplevel):
+                title = child.title()
+                if any(keyword in title for keyword in ["Exposure", "Heston", "Analysis", "Chart"]):
+                    try:
+                        if child.winfo_exists():
+                            return True
+                    except:
+                        pass
+    except:
+        pass
+    
+    return False
+
+def update_clear_graphs_button_state(self):
+    """Update the state of the clear graphs button based on active chart windows"""
+    if hasattr(self, 'clear_graphs_button'):
+        if has_active_chart_windows(self):
+            self.clear_graphs_button.configure(state="normal")
+        else:
+            self.clear_graphs_button.configure(state="disabled")  # Window may have been closed

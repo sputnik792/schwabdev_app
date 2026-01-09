@@ -485,6 +485,60 @@ def build_sidebar(self):
         command=self.open_data_analysis_tools
     )
     self.data_analysis_button.pack(fill="x", padx=10, pady=6)
+    
+    # Clear All Graphs button (3D styled)
+    from ui.dashboard.charts_controller import close_all_chart_windows, update_clear_graphs_button_state, has_active_chart_windows
+    
+    def clear_all_graphs():
+        """Wrapper to call close_all_chart_windows with self"""
+        close_all_chart_windows(self)
+    
+    # Create a container frame for 3D shadow effect
+    clear_graphs_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+    clear_graphs_frame.pack(fill="x", padx=10, pady=6)
+    
+    # Shadow frame for 3D depth effect (darker, offset)
+    shadow_frame = ctk.CTkFrame(
+        clear_graphs_frame,
+        fg_color=("gray40", "gray20"),
+        corner_radius=8
+    )
+    shadow_frame.pack(fill="x", padx=(2, 0), pady=(2, 0))
+    
+    # Main button with 3D styling
+    self.clear_graphs_button = ctk.CTkButton(
+        shadow_frame,
+        text="Clear All Graphs",
+        command=clear_all_graphs,
+        state="disabled",  # Disabled by default, enabled when charts exist
+        border_width=2,
+        border_color=("gray60", "gray30"),  # Lighter border for 3D effect
+        corner_radius=8,
+        height=40,  # Slightly taller for more presence
+        font=ctk.CTkFont(size=13, weight="bold"),  # Bold text for emphasis
+        fg_color=("gray75", "gray35"),  # Slightly lighter than default
+        hover_color=("gray65", "gray45"),  # Darker on hover for pressed effect
+        text_color=("black", "white")
+    )
+    self.clear_graphs_button.pack(fill="x", padx=0, pady=0)
+    
+    # Store the update function for later use
+    self.update_clear_graphs_button_state = lambda: update_clear_graphs_button_state(self)
+    
+    # Check initial state
+    if has_active_chart_windows(self):
+        self.clear_graphs_button.configure(state="normal")
+    
+    # Set up periodic check to update button state (in case windows are closed manually)
+    def periodic_button_update():
+        """Periodically check and update button state"""
+        if hasattr(self, 'clear_graphs_button') and hasattr(self, 'update_clear_graphs_button_state'):
+            self.update_clear_graphs_button_state()
+        # Schedule next check in 1 second
+        self.root.after(1000, periodic_button_update)
+    
+    # Start periodic updates
+    self.root.after(1000, periodic_button_update)
 
     ctk.CTkFrame(self.sidebar, height=1).pack(fill="x", pady=5)
     # ----------------------------------
