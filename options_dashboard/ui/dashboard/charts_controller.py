@@ -186,6 +186,10 @@ def generate_selected_chart(self, spot_override=None):
         if hasattr(self, 'update_clear_graphs_button_state'):
             self.update_clear_graphs_button_state()
         
+        # Update focus bar
+        if hasattr(self, 'update_focus_bar'):
+            self.update_focus_bar()
+        
         # Embed the chart
         embed_matplotlib_chart(
             win,
@@ -408,6 +412,10 @@ def generate_chart_group(self):
             if hasattr(self, 'update_clear_graphs_button_state'):
                 self.update_clear_graphs_button_state()
             
+            # Update focus bar after charts are created
+            if hasattr(self, 'update_focus_bar'):
+                self.update_focus_bar()
+            
             # After dialog closes, remove transient so main window can come forward when clicked
             def remove_transient_after_dialog():
                 if hasattr(self, '_chart_windows') and self._chart_windows:
@@ -490,6 +498,10 @@ def close_all_chart_windows(self):
     
     # Update button state after closing
     update_clear_graphs_button_state(self)
+    
+    # Update focus bar after closing charts
+    if hasattr(self, 'update_focus_bar'):
+        self.update_focus_bar()
 
 def has_active_chart_windows(self):
     """Check if there are any active chart windows"""
@@ -530,3 +542,110 @@ def update_clear_graphs_button_state(self):
             self.clear_graphs_button.configure(state="normal")
         else:
             self.clear_graphs_button.configure(state="disabled")  # Window may have been closed
+
+def get_tickers_with_charts(self):
+    """Get a set of ticker symbols that have at least one active chart window"""
+    tickers = set()
+    
+    # Check tracked windows
+    if hasattr(self, '_chart_windows') and self._chart_windows:
+        for win in self._chart_windows:
+            try:
+                if win.winfo_exists():
+                    title = win.title()
+                    # Extract ticker from title (format: "SYMBOL Model Exposure - DATE | TIME" or "SYMBOL Heston Model Analysis - DATE | TIME")
+                    # Titles typically start with the ticker symbol
+                    parts = title.split()
+                    if parts:
+                        ticker = parts[0]
+                        # Validate it looks like a ticker (uppercase, alphanumeric, 1-5 chars)
+                        if ticker.isalnum() and ticker.isupper() and 1 <= len(ticker) <= 5:
+                            tickers.add(ticker)
+            except:
+                pass
+    
+    # Also check untracked chart windows (like Heston charts)
+    try:
+        for child in self.root.winfo_children():
+            if isinstance(child, ctk.CTkToplevel):
+                try:
+                    if child.winfo_exists():
+                        title = child.title()
+                        if any(keyword in title for keyword in ["Exposure", "Heston", "Analysis", "Chart"]):
+                            # Extract ticker from title
+                            parts = title.split()
+                            if parts:
+                                ticker = parts[0]
+                                if ticker.isalnum() and ticker.isupper() and 1 <= len(ticker) <= 5:
+                                    tickers.add(ticker)
+                except:
+                    pass
+    except:
+        pass
+    
+    return tickers
+
+def focus_ticker_charts(self, symbol):
+    """Bring all charts for a specific ticker to front, move others to back"""
+    # First, move all chart windows to back
+    all_chart_windows = []
+    
+    # Collect tracked windows
+    if hasattr(self, '_chart_windows') and self._chart_windows:
+        for win in self._chart_windows:
+            try:
+                if win.winfo_exists():
+                    all_chart_windows.append(win)
+            except:
+                pass
+    
+    # Collect untracked chart windows
+    try:
+        for child in self.root.winfo_children():
+            if isinstance(child, ctk.CTkToplevel):
+                try:
+                    if child.winfo_exists():
+                        title = child.title()
+                        if any(keyword in title for keyword in ["Exposure", "Heston", "Analysis", "Chart"]):
+                            all_chart_windows.append(child)
+                except:
+                    pass
+    except:
+        pass
+    
+    # Separate windows by ticker
+    target_windows = []
+    other_windows = []
+    
+    for win in all_chart_windows:
+        try:
+            if win.winfo_exists():
+                title = win.title()
+                # Check if this window is for the target ticker
+                if title.startswith(symbol + " ") or title.startswith(symbol + "-"):
+                    target_windows.append(win)
+                else:
+                    other_windows.append(win)
+        except:
+            pass
+    
+    # Move other windows to back first
+    for win in other_windows:
+        try:
+            if win.winfo_exists():
+                win.lower()
+        except:
+            pass
+    
+    # Bring target ticker's windows to front
+    for win in target_windows:
+        try:
+            if win.winfo_exists():
+                win.lift()
+                win.focus()
+        except:
+            pass
+    
+    # Update focus bar after focusing
+    if hasattr(self, 'update_focus_bar'):
+        self.update_focus_bar()

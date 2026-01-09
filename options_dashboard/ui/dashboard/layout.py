@@ -30,15 +30,19 @@ def build_layout(self):
         # Create menu window
         menu_window = ctk.CTkToplevel(self.root)
         menu_window.title("Options Dashboard")
-        menu_window.geometry("200x200")
+        menu_window.geometry("250x400")  # Made bigger
         menu_window.transient(self.root)
         menu_window.grab_set()
         
         # Position near the menu button
         menu_window.geometry("+%d+%d" % (self.root.winfo_x() + 50, self.root.winfo_y() + 80))
         
-        menu_frame = ctk.CTkFrame(menu_window)
-        menu_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        # Create scrollable frame for vertical scrolling
+        scrollable_frame = ctk.CTkScrollableFrame(menu_window)
+        scrollable_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        menu_frame = ctk.CTkFrame(scrollable_frame)
+        menu_frame.pack(fill="both", expand=True)
         
         def menu_item_clicked(option):
             menu_window.destroy()
@@ -49,18 +53,20 @@ def build_layout(self):
                 show_auto_refresh_settings(self)
             elif option == "Color Theme":
                 show_color_theme_settings(self)
+            elif option == "API Credentials":
+                self.edit_api_credentials()
             elif option == "About":
                 # TODO: Implement about dialog
                 pass
         
-        menu_options = ["Save Images", "Auto Refresh", "Color Theme", "About"]
+        menu_options = ["Save Images", "Auto Refresh", "Color Theme", "API Credentials", "About"]
         for option in menu_options:
             btn = ctk.CTkButton(
                 menu_frame,
                 text=option,
                 command=lambda opt=option: menu_item_clicked(opt),
-                width=180,
-                height=35,
+                width=220,
+                height=40,
                 anchor="w"
             )
             btn.pack(fill="x", pady=5)
@@ -539,6 +545,89 @@ def build_sidebar(self):
     
     # Start periodic updates
     self.root.after(1000, periodic_button_update)
+    
+    # Focus bar for ticker symbols with active graphs
+    from ui.dashboard.charts_controller import get_tickers_with_charts, focus_ticker_charts
+    
+    # Label for focus bar
+    ctk.CTkLabel(
+        self.sidebar,
+        text="Focus",
+        font=ctk.CTkFont(size=12, weight="bold")
+    ).pack(pady=(15, 5))
+    
+    # Create scrollable frame for ticker buttons
+    focus_bar_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+    focus_bar_frame.pack(fill="x", padx=10, pady=(0, 10))
+    
+    # Scrollable frame for horizontal scrolling
+    self.focus_bar_scrollable = ctk.CTkScrollableFrame(
+        focus_bar_frame,
+        orientation="horizontal",
+        height=50,
+        fg_color="transparent"
+    )
+    self.focus_bar_scrollable.pack(fill="x")
+    
+    # Container for ticker buttons
+    self.focus_bar_buttons_frame = ctk.CTkFrame(
+        self.focus_bar_scrollable,
+        fg_color="transparent"
+    )
+    self.focus_bar_buttons_frame.pack(fill="x", padx=5, pady=5)
+    
+    # Store reference to update function
+    def update_focus_bar():
+        """Update the focus bar with current tickers that have active charts"""
+        # Get tickers with active charts
+        tickers_with_charts = get_tickers_with_charts(self)
+        
+        # Clear existing buttons
+        for widget in self.focus_bar_buttons_frame.winfo_children():
+            widget.destroy()
+        
+        # Create buttons for each ticker
+        if tickers_with_charts:
+            for ticker in sorted(tickers_with_charts):
+                def make_focus_handler(symbol):
+                    """Create a closure to handle focus for a specific ticker"""
+                    return lambda: focus_ticker_charts(self, symbol)
+                
+                btn = ctk.CTkButton(
+                    self.focus_bar_buttons_frame,
+                    text=ticker,
+                    command=make_focus_handler(ticker),
+                    width=60,
+                    height=30,
+                    font=ctk.CTkFont(size=11),
+                    corner_radius=6
+                )
+                btn.pack(side="left", padx=3)
+        else:
+            # Show placeholder when no charts
+            placeholder = ctk.CTkLabel(
+                self.focus_bar_buttons_frame,
+                text="No active charts",
+                font=ctk.CTkFont(size=10),
+                text_color=("gray60", "gray50")
+            )
+            placeholder.pack(side="left", padx=5)
+    
+    self.update_focus_bar = update_focus_bar
+    
+    # Initial update
+    update_focus_bar()
+    
+    # Set up periodic update for focus bar
+    def periodic_focus_bar_update():
+        """Periodically update focus bar"""
+        if hasattr(self, 'update_focus_bar'):
+            self.update_focus_bar()
+        # Schedule next check in 1 second
+        self.root.after(1000, periodic_focus_bar_update)
+    
+    # Start periodic updates
+    self.root.after(1000, periodic_focus_bar_update)
 
     ctk.CTkFrame(self.sidebar, height=1).pack(fill="x", pady=5)
     # ----------------------------------
@@ -589,13 +678,6 @@ def build_sidebar(self):
     
     # Separator
     ctk.CTkFrame(self.sidebar, height=1).pack(fill="x", pady=5)
-    
-    # API Credentials button
-    ctk.CTkButton(
-        self.sidebar,
-        text="API Credentials",
-        command=self.edit_api_credentials
-    ).pack(fill="x", padx=10, pady=10)
 
 def show_multi_view(self):
     """Show the multi-tab view"""
