@@ -600,9 +600,10 @@ def build_sidebar(self):
                         context_menu = tk.Menu(self.root, tearoff=0)
                         
                         # Add menu items
+                        from ui.dashboard.charts_controller import merge_ticker_charts_to_new_window
                         context_menu.add_command(
                             label="Merge to new window",
-                            command=lambda: None  # Placeholder - do nothing for now
+                            command=lambda: merge_ticker_charts_to_new_window(self, symbol)
                         )
                         context_menu.add_separator()
                         context_menu.add_command(

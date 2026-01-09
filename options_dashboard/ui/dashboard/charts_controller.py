@@ -1,6 +1,7 @@
 import customtkinter as ctk
 import datetime
 import tkinter as tk
+from tkinter import ttk
 import pandas as pd
 from ui import dialogs
 from models.greeks import gamma, vanna, volga, charm, vega
@@ -763,3 +764,323 @@ def close_ticker_charts(self, symbol):
         self.update_focus_bar()
     
     return closed_count
+
+def get_ticker_chart_windows(self, symbol):
+    """Get all chart windows for a specific ticker and extract expiration dates"""
+    chart_info = []  # List of (window, expiration_date) tuples
+    
+    # Collect all chart windows
+    all_chart_windows = []
+    
+    # Collect tracked windows
+    if hasattr(self, '_chart_windows') and self._chart_windows:
+        for win in self._chart_windows:
+            try:
+                if win.winfo_exists():
+                    all_chart_windows.append(win)
+            except:
+                pass
+    
+    # Collect untracked chart windows
+    try:
+        for child in self.root.winfo_children():
+            if isinstance(child, ctk.CTkToplevel):
+                try:
+                    if child.winfo_exists():
+                        title = child.title()
+                        if any(keyword in title for keyword in ["Exposure", "Heston", "Analysis", "Chart"]):
+                            all_chart_windows.append(child)
+                except:
+                    pass
+    except:
+        pass
+    
+    # Extract windows and expiration dates for the target ticker
+    for win in all_chart_windows:
+        try:
+            if win.winfo_exists():
+                title = win.title()
+                # Check if this window is for the target ticker
+                if title.startswith(symbol + " ") or title.startswith(symbol + "-"):
+                    # Extract expiration date from title
+                    # Format: "SYMBOL Model Exposure - DATE | TIME" or "SYMBOL Heston Model Analysis - DATE | TIME"
+                    exp_date = None
+                    if " - " in title:
+                        parts = title.split(" - ")
+                        if len(parts) >= 2:
+                            date_part = parts[1].split(" |")[0].strip()  # Date before "|"
+                            exp_date = date_part
+                    chart_info.append((win, exp_date))
+        except:
+            pass
+    
+    return chart_info
+
+def regenerate_chart_data(self, symbol, exp):
+    """Regenerate chart data for a specific symbol and expiration"""
+    from utils.time import time_to_expiration
+    
+    # Get ticker state
+    if symbol not in self.ticker_data:
+        return None
+    
+    state = self.ticker_data[symbol]
+    if not state or exp not in state.exp_data_map:
+        return None
+    
+    # Get expiration data
+    df = state.exp_data_map[exp]
+    if df is None or df.empty:
+        return None
+    
+    spot = state.price
+    if spot <= 0:
+        return None
+    
+    T = time_to_expiration(exp)
+    if T <= 0:
+        return None
+    
+    model_name = self.model_var.get()
+    CONTRACT_MULT = 100
+    rows = []
+    
+    # Generate exposure data
+    for row in df.itertuples(index=False):
+        K = float(row.Strike) if hasattr(row, 'Strike') else 0
+        if K <= 0:
+            continue
+
+        for opt in ("CALL", "PUT"):
+            opt_key = opt.capitalize()
+            iv_attr = f"IV_{opt_key}"
+            oi_attr = f"OI_{opt_key}"
+            iv = float(getattr(row, iv_attr, 0) or 0)
+            oi = float(getattr(row, oi_attr, 0) or 0)
+            if iv <= 0 or oi <= 0:
+                continue
+
+            sign = 1 if opt == "CALL" else -1
+
+            if model_name == "Gamma":
+                g = gamma(spot, K, T, RISK_FREE_RATE, DIVIDEND_YIELD, iv)
+                scale = oi * CONTRACT_MULT * (spot ** 2) * 0.01
+                exp_val = sign * g * scale
+            elif model_name == "Vanna":
+                v = vanna(spot, K, T, RISK_FREE_RATE, DIVIDEND_YIELD, iv)
+                scale = oi * CONTRACT_MULT * spot * iv
+                exp_val = sign * abs(v) * scale
+            elif model_name == "Volga":
+                vg = volga(spot, K, T, RISK_FREE_RATE, DIVIDEND_YIELD, iv)
+                ve = vega(spot, K, T, RISK_FREE_RATE, DIVIDEND_YIELD, iv)
+                scale = oi * ve
+                exp_val = sign * abs(vg) * scale
+            else:  # Charm
+                c = charm(spot, K, T, RISK_FREE_RATE, DIVIDEND_YIELD, iv)
+                scale = oi * CONTRACT_MULT * spot
+                exp_val = sign * abs(c) * scale
+
+            rows.append({
+                "Strike": K,
+                "Type": opt,
+                "Exposure": exp_val
+            })
+
+    if not rows:
+        return None
+
+    df_plot = build_exposure_dataframe(rows)
+    total = df_plot["Exposure"].sum() / 1e9
+
+    zero_gamma = find_zero_gamma(
+        state.exp_data_map[exp],
+        spot * 0.9,
+        spot * 1.1,
+        60,
+        T,
+        RISK_FREE_RATE,
+        DIVIDEND_YIELD
+    )
+    
+    return {
+        "df_plot": df_plot,
+        "symbol": symbol,
+        "exp_date": exp.split(":")[0],
+        "model_name": model_name,
+        "total": total,
+        "zero_gamma": zero_gamma
+    }
+
+def merge_ticker_charts_to_new_window(self, symbol):
+    """Merge all charts for a ticker into a new tabbed window"""
+    # Get all chart windows for this ticker
+    chart_windows = get_ticker_chart_windows(self, symbol)
+    
+    if not chart_windows:
+        dialogs.warning("No Charts", f"No active charts found for {symbol}")
+        return
+    
+    # Extract expiration dates from window titles
+    expiration_dates = []
+    for win, exp_date in chart_windows:
+        if exp_date:
+            expiration_dates.append(exp_date)
+    
+    # Remove duplicates and sort
+    expiration_dates = sorted(set(expiration_dates))
+    
+    if not expiration_dates:
+        dialogs.warning("No Expiration Data", f"Could not extract expiration dates from charts for {symbol}")
+        return
+    
+    # Map expiration dates back to full expiration strings (from ticker_data)
+    if symbol not in self.ticker_data:
+        dialogs.warning("No Data", f"No data available for {symbol}")
+        return
+    
+    state = self.ticker_data[symbol]
+    if not state or not state.exp_data_map:
+        dialogs.warning("No Data", f"No expiration data available for {symbol}")
+        return
+    
+    # Build mapping from date to full expiration string
+    # Handle both exact matches and date-only matches
+    date_to_exp = {}
+    for exp in state.exp_data_map.keys():
+        exp_date = exp.split(":")[0] if ":" in exp else exp
+        # Store both the date and the full expiration string
+        if exp_date not in date_to_exp:
+            date_to_exp[exp_date] = []
+        date_to_exp[exp_date].append(exp)
+    
+    # Match expiration dates to full expiration strings
+    matched_expirations = []
+    for exp_date in expiration_dates:
+        if exp_date in date_to_exp:
+            # Use the first matching expiration (typically there's only one per date)
+            matched_expirations.extend(date_to_exp[exp_date])
+        else:
+            # Try to match by date format (in case of slight variations)
+            for exp_key in state.exp_data_map.keys():
+                key_date = exp_key.split(":")[0] if ":" in exp_key else exp_key
+                if key_date == exp_date or exp_date in key_date or key_date in exp_date:
+                    if exp_key not in matched_expirations:
+                        matched_expirations.append(exp_key)
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_expirations = []
+    for exp in matched_expirations:
+        if exp not in seen:
+            seen.add(exp)
+            unique_expirations.append(exp)
+    matched_expirations = unique_expirations
+    
+    if not matched_expirations:
+        dialogs.warning("No Matches", f"Could not match expiration dates to data for {symbol}")
+        return
+    
+    # Close existing windows for this ticker
+    close_ticker_charts(self, symbol)
+    
+    # Create new merged window with tabs
+    merged_win = ctk.CTkToplevel(self.root)
+    merged_win.geometry("1000x750")
+    model_name = self.model_var.get()
+    current_time = datetime.datetime.now().strftime('%I:%M %p')
+    merged_win.title(f"{symbol} {model_name} Exposure - Merged | {current_time}")
+    
+    # Create notebook for organizing charts by expiration (using ttk.Notebook)
+    # Use a regular tk.Frame container for the notebook to ensure proper styling
+    container = tk.Frame(merged_win)
+    container.pack(fill="both", expand=True, padx=10, pady=10)
+    
+    notebook = ttk.Notebook(container)
+    notebook.pack(fill="both", expand=True)
+    
+    # Sort expirations chronologically by date (parse and sort properly)
+    def parse_expiration_date(exp):
+        """Extract date from expiration string for sorting"""
+        try:
+            date_str = exp.split(":")[0] if ":" in exp else exp
+            # Parse as YYYY-MM-DD
+            parts = date_str.split("-")
+            if len(parts) == 3:
+                year, month, day = map(int, parts)
+                return (year, month, day)
+        except:
+            pass
+        return (0, 0, 0)  # Fallback for invalid dates
+    
+    sorted_expirations = sorted(matched_expirations, key=parse_expiration_date)
+    
+    # Create a tab for each expiration and regenerate the chart
+    tabs_created = 0
+    for exp in sorted_expirations:
+        exp_date = exp.split(":")[0] if ":" in exp else exp
+        
+        # Regenerate chart data for this expiration
+        chart_data = regenerate_chart_data(self, symbol, exp)
+        
+        if not chart_data:
+            # Skip this expiration if chart data couldn't be regenerated
+            continue
+        
+        # Create tab frame
+        tab = tk.Frame(notebook)
+        notebook.add(tab, text=exp_date)
+        
+        # Embed chart in this tab
+        try:
+            # Create a container frame in the tab for the chart
+            chart_container = tk.Frame(tab)
+            chart_container.pack(fill="both", expand=True)
+            
+            embed_matplotlib_chart(
+                chart_container,
+                chart_data["df_plot"],
+                chart_data["symbol"],
+                chart_data["exp_date"],
+                chart_data["model_name"],
+                chart_data["total"],
+                chart_data["zero_gamma"]
+            )
+            tabs_created += 1
+        except Exception as e:
+            # If chart embedding fails, add error message to tab
+            import traceback
+            error_label = tk.Label(
+                tab,
+                text=f"Error loading chart for {exp_date}:\n{str(e)}",
+                fg="red",
+                justify="left",
+                wraplength=800
+            )
+            error_label.pack(pady=20)
+            print(f"Error embedding chart for {exp_date}: {traceback.format_exc()}")
+    
+    # If no tabs were created, show error and close window
+    if tabs_created == 0:
+        merged_win.destroy()
+        dialogs.error(
+            "Merge Failed",
+            f"Could not regenerate charts for {symbol}.\n"
+            "Make sure data is still available for this ticker."
+        )
+        return
+    
+    # Track the merged window in chart windows list
+    if not hasattr(self, '_chart_windows'):
+        self._chart_windows = []
+    self._chart_windows.append(merged_win)
+    
+    # Update focus bar and button states
+    if hasattr(self, 'update_clear_graphs_button_state'):
+        self.update_clear_graphs_button_state()
+    if hasattr(self, 'update_focus_bar'):
+        self.update_focus_bar()
+    
+    # Bring window to front
+    merged_win.update_idletasks()
+    merged_win.lift()
+    merged_win.focus()
