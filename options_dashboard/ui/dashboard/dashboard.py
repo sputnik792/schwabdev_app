@@ -7,8 +7,8 @@ import os
 import json
 
 # Lightweight imports (always needed)
-from options_dashboard.config import MAX_TICKERS, PRESET_FILE
-from options_dashboard.state.ticker_state import TickerState
+from config import MAX_TICKERS, PRESET_FILE
+from state.ticker_state import TickerState
 from ui import dialogs
 
 # Heavy imports deferred until needed (lazy loading)
@@ -831,7 +831,7 @@ class Dashboard(ctk.CTkFrame):
 
     def edit_api_credentials(self):
         """Open window to edit API credentials"""
-        from options_dashboard.config_loader import APP_KEY, SECRET
+        from config_loader import APP_KEY, SECRET
         
         win = ctk.CTkToplevel(self.root)
         win.title("Edit API Credentials")
@@ -897,7 +897,7 @@ class Dashboard(ctk.CTkFrame):
             
             try:
                 # Save to JSON config file using the config loader
-                from options_dashboard.config_loader import save_api_config, CALLBACK_URL
+                from config_loader import save_api_config, CALLBACK_URL
                 success = save_api_config(new_app_key, new_secret, CALLBACK_URL)
                 
                 if success:

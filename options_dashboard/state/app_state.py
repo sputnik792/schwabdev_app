@@ -1,7 +1,7 @@
 import json
 import os
 from pathlib import Path
-from options_dashboard.config import STATE_FILE
+from config import STATE_FILE
 
 def get_state_file_path():
     """Get the absolute path to the state file"""

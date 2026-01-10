@@ -14,7 +14,7 @@ def initialize_app():
     from ui.dashboard.dashboard import Dashboard
     from style.custom_theme_controller import set_color_theme, list_available_themes
     from state.app_state import get_state_value, save_app_state
-    from options_dashboard.config import STATE_FILE
+    from config import STATE_FILE
     from data.schwab_auth import (
         perform_pending_reset,
         schwab_tokens_exist,
