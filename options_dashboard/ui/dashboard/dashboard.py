@@ -174,7 +174,7 @@ class Dashboard(ctk.CTkFrame):
         win = ctk.CTkToplevel(self.root)
         win.title("Edit Preset Tickers")
         win.resizable(True, True)  # Enable resizing and maximize button
-        win.minsize(400, 200)
+        win.minsize(400, 350)  # Increased minimum height to ensure save button is always visible
         
         # Explicitly enable maximize button (Windows)
         try:
@@ -207,16 +207,17 @@ class Dashboard(ctk.CTkFrame):
             left_count = 12
             right_count = initial_count - 12
             rows_needed = max(left_count, right_count)
-        base_height = 180 + (rows_needed * 45)  # Header + entries + buttons (increased from 120 to 180 to show save button)
+        # Ensure minimum height to always show save button (minimum 350px)
+        base_height = max(250 + (rows_needed * 48), 350)
         win.geometry(f"500x{base_height}")
 
         # Main container
         main_frame = ctk.CTkFrame(win)
         main_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # Container for two columns
+        # Container for two columns - don't expand, just take needed space
         columns_frame = ctk.CTkFrame(main_frame)
-        columns_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        columns_frame.pack(fill="both", expand=False, padx=10, pady=(10, 5))
 
         # Left column frame
         left_column = ctk.CTkFrame(columns_frame)
@@ -281,11 +282,11 @@ class Dashboard(ctk.CTkFrame):
                 right_count = num_entries - 12
                 rows_needed = max(left_count, right_count)
             
-            # Calculate height with more padding:
-            # - Base height for headers, buttons, padding: 220 (increased from 180)
-            # - Row height: 48 pixels per entry (increased from 45 for better spacing)
-            # - Add extra padding for save button area
-            calculated_height = 220 + (rows_needed * 48)
+            # Calculate height with more padding to ensure save button is always visible:
+            # - Base height for headers, buttons, padding: 250 (increased to always show save button)
+            # - Row height: 48 pixels per entry
+            # - Minimum height ensures save button is always visible
+            calculated_height = max(250 + (rows_needed * 48), 300)  # Minimum 300px to ensure save button visibility
             
             # Only auto-resize if user hasn't manually resized, but ensure minimum height
             if not user_manually_resized[0]:
@@ -337,9 +338,9 @@ class Dashboard(ctk.CTkFrame):
                 current_values.pop()
                 update_layout()
 
-        # Control buttons frame
+        # Control buttons frame - pack before columns so it stays visible
         control_frame = ctk.CTkFrame(main_frame)
-        control_frame.pack(fill="x", padx=10, pady=5)
+        control_frame.pack(fill="x", padx=10, pady=(0, 5))
 
         add_btn = ctk.CTkButton(control_frame, text="+", width=50, command=add_ticker)
         add_btn.pack(side="left", padx=5)
@@ -347,9 +348,9 @@ class Dashboard(ctk.CTkFrame):
         remove_btn = ctk.CTkButton(control_frame, text="-", width=50, command=remove_ticker)
         remove_btn.pack(side="left", padx=5)
 
-        # Save button frame
+        # Save button frame - pack last so it's always at the bottom and visible
         button_frame = ctk.CTkFrame(main_frame)
-        button_frame.pack(fill="x", padx=10, pady=10)
+        button_frame.pack(fill="x", side="bottom", padx=10, pady=(5, 10))
 
         def save():
             self.preset_tickers = [
