@@ -492,69 +492,86 @@ def build_sidebar(self):
     )
     self.data_analysis_button.pack(fill="x", padx=10, pady=6)
     
-    # Clear All Graphs button (3D styled)
-    from ui.dashboard.charts_controller import close_all_chart_windows, update_clear_graphs_button_state, has_active_chart_windows
+    # Graph Tools popup menu (click-activated, like Options Dashboard)
+    from ui.dashboard.charts_controller import close_all_chart_windows, has_active_chart_windows, get_tickers_with_charts, merge_ticker_charts_to_new_window
     
-    def clear_all_graphs():
-        """Wrapper to call close_all_chart_windows with self"""
-        close_all_chart_windows(self)
+    def show_graph_tools_menu():
+        """Show the Graph Tools popup menu"""
+        # Create menu window
+        menu_window = ctk.CTkToplevel(self.root)
+        menu_window.title("Graph Tools")
+        menu_window.geometry("200x150")
+        menu_window.transient(self.root)
+        menu_window.grab_set()
+        
+        # Position near the Graph Tools button
+        menu_window.geometry("+%d+%d" % (self.root.winfo_x() + 50, self.root.winfo_y() + 200))
+        
+        # Create menu frame
+        menu_frame = ctk.CTkFrame(menu_window)
+        menu_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        def menu_item_clicked(option):
+            menu_window.destroy()
+            if option == "Clear All Graphs":
+                close_all_chart_windows(self)
+            elif option == "Merge All Charts":
+                tickers_with_charts = get_tickers_with_charts(self)
+                if not tickers_with_charts:
+                    dialogs.info("No Charts", "No active charts to merge.")
+                    return
+                
+                # Merge charts for each ticker
+                for ticker in sorted(tickers_with_charts):
+                    try:
+                        merge_ticker_charts_to_new_window(self, ticker)
+                    except Exception as e:
+                        print(f"Error merging charts for {ticker}: {e}")
+                        continue
+        
+        # Check if charts exist to enable/disable menu items
+        has_charts = has_active_chart_windows(self)
+        
+        menu_options = [
+            ("Clear All Graphs", "Clear All Graphs"),
+            ("Merge All Charts", "Merge All Charts")
+        ]
+        
+        for option_text, option_value in menu_options:
+            btn = ctk.CTkButton(
+                menu_frame,
+                text=option_text,
+                command=lambda opt=option_value: menu_item_clicked(opt),
+                width=180,
+                height=40,
+                anchor="w",
+                state="normal" if has_charts else "disabled"
+            )
+            btn.pack(pady=5)
     
-    # Create a container frame for 3D shadow effect
-    clear_graphs_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-    clear_graphs_frame.pack(fill="x", padx=10, pady=6)
-    
-    # Shadow frame for 3D depth effect (darker, offset)
-    shadow_frame = ctk.CTkFrame(
-        clear_graphs_frame,
-        fg_color=("gray40", "gray20"),
+    # Create Graph Tools button
+    graph_tools_btn = ctk.CTkButton(
+        self.sidebar,
+        text="Graph Tools",
+        command=show_graph_tools_menu,
+        height=35,
+        font=ctk.CTkFont(size=12, weight="bold"),
         corner_radius=8
     )
-    shadow_frame.pack(fill="x", padx=(2, 0), pady=(2, 0))
+    graph_tools_btn.pack(fill="x", padx=10, pady=6)
     
-    # Main button with 3D styling
-    self.clear_graphs_button = ctk.CTkButton(
-        shadow_frame,
-        text="Clear All Graphs",
-        command=clear_all_graphs,
-        state="disabled",  # Disabled by default, enabled when charts exist
-        border_width=2,
-        border_color=("gray60", "gray30"),  # Lighter border for 3D effect
-        corner_radius=8,
-        height=40,  # Slightly taller for more presence
-        font=ctk.CTkFont(size=13, weight="bold"),  # Bold text for emphasis
-        fg_color=("gray75", "gray35"),  # Slightly lighter than default
-        hover_color=("gray65", "gray45"),  # Darker on hover for pressed effect
-        text_color=("black", "white")
-    )
-    self.clear_graphs_button.pack(fill="x", padx=0, pady=0)
-    
-    # Store the update function for later use
-    self.update_clear_graphs_button_state = lambda: update_clear_graphs_button_state(self)
-    
-    # Check initial state
-    if has_active_chart_windows(self):
-        self.clear_graphs_button.configure(state="normal")
-    
-    # Set up periodic check to update button state (in case windows are closed manually)
-    def periodic_button_update():
-        """Periodically check and update button state"""
-        if hasattr(self, 'clear_graphs_button') and hasattr(self, 'update_clear_graphs_button_state'):
-            self.update_clear_graphs_button_state()
-        # Schedule next check in 1 second
-        self.root.after(1000, periodic_button_update)
-    
-    # Start periodic updates
-    self.root.after(1000, periodic_button_update)
+    # Store a no-op function for compatibility (in case other code calls it)
+    self.update_clear_graphs_button_state = lambda: None
     
     # Focus bar for ticker symbols with active graphs
-    from ui.dashboard.charts_controller import get_tickers_with_charts, focus_ticker_charts, close_ticker_charts
+    from ui.dashboard.charts_controller import focus_ticker_charts, close_ticker_charts
     
     # Label for focus bar
     ctk.CTkLabel(
         self.sidebar,
         text="Focus",
         font=ctk.CTkFont(size=12, weight="bold")
-    ).pack(pady=(15, 5))
+    ).pack(pady=(0, 5))
     
     # Create scrollable frame for ticker buttons
     focus_bar_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
