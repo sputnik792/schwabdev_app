@@ -47,8 +47,8 @@ def build_layout(self):
         def menu_item_clicked(option):
             menu_window.destroy()
             if option == "Save Images":
-                # TODO: Implement save images
-                pass
+                from ui.dashboard.save_images import show_save_images_window
+                show_save_images_window(self)
             elif option == "Auto Refresh":
                 show_auto_refresh_settings(self)
             elif option == "Color Theme":
