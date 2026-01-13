@@ -33,13 +33,24 @@ def generate_selected_chart(self, spot_override=None):
             return
         
         symbol = self.single_view_symbol
-        if symbol not in self.ticker_data:
+        # Check for data with base symbol first, then try with "(CSV)" suffix
+        # (CSV data is stored with display_symbol which includes "(CSV)")
+        state = self.ticker_data.get(symbol)
+        if not state:
+            # Try with "(CSV)" suffix for CSV-loaded data
+            csv_symbol = f"{symbol} (CSV)"
+            state = self.ticker_data.get(csv_symbol)
+            if state:
+                symbol = csv_symbol  # Use CSV symbol for lookup
+        
+        if not state:
             dialogs.warning("No Data", "Please fetch data first.")
             return
         
-        state = self.ticker_data[symbol]
         # Single view entries use the key format "_single_{symbol}"
-        single_view_key = f"_single_{symbol}"
+        # Use base symbol (without "(CSV)") for the UI key
+        base_symbol = symbol.replace(" (CSV)", "")
+        single_view_key = f"_single_{base_symbol}"
         ui = self.ticker_tabs.get(single_view_key)
         if not ui:
             dialogs.warning("No Data", "Please fetch data first.")
@@ -50,9 +61,9 @@ def generate_selected_chart(self, spot_override=None):
             dialogs.warning("No Expiration", "Please select an expiration date.")
             return
         
-        # Create chart key - use symbol and exp only to catch duplicate button clicks
+        # Create chart key - use base symbol (without "(CSV)") and exp to catch duplicate button clicks
         # (spot_override will be None for button clicks, so we can use a simpler key)
-        chart_key = (symbol, exp, spot_override if spot_override is not None else state.price)
+        chart_key = (base_symbol, exp, spot_override if spot_override is not None else state.price)
         
         # Check if we're already generating this exact chart - do this BEFORE any processing
         if chart_key in self._generating_charts:
