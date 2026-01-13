@@ -792,12 +792,14 @@ def show_multi_view(self):
         apply_ttk_styles()
         build_tabs(self)
     
-    # Show multi view
+    # Show multi view immediately (before heavy operations)
     self.multi_view.pack(fill="both", expand=True)
+    self.root.update_idletasks()  # Force immediate UI update
     
     # Rebuild tabs to show current tickers (if method is available)
     if hasattr(self, 'rebuild_tabs'):
         self.rebuild_tabs()
+        self.root.update_idletasks()  # Update UI after tabs are created
     
     # Restore the previously selected tab if it was saved
     if hasattr(self, '_saved_multi_view_symbol') and self._saved_multi_view_symbol:
@@ -822,84 +824,94 @@ def show_multi_view(self):
                     except:
                         pass
     
-    # Repopulate tables and prices for tickers that already have data
-    # This ensures data persists when switching back from single view
-    # IMPORTANT: Only use data that was NOT fetched in single view
-    print(f"[SHOW_MULTI_VIEW] Starting data restoration...")
-    print(f"[SHOW_MULTI_VIEW] preset_tickers: {self.preset_tickers}")
-    print(f"[SHOW_MULTI_VIEW] ticker_data keys: {list(self.ticker_data.keys())}")
-    print(f"[SHOW_MULTI_VIEW] ticker_data count: {len(self.ticker_data)}")
-    print(f"[SHOW_MULTI_VIEW] multi_view_data_backup keys: {list(self.multi_view_data_backup.keys()) if hasattr(self, 'multi_view_data_backup') else 'N/A'}")
-    
-    for symbol in self.preset_tickers:
-        print(f"[SHOW_MULTI_VIEW] Processing symbol: {symbol}")
-        # Check backup first (multi-view data that was preserved when single-view overwrote it)
-        state = None
-        if hasattr(self, 'multi_view_data_backup') and symbol in self.multi_view_data_backup:
-            state = self.multi_view_data_backup[symbol]
-            print(f"[SHOW_MULTI_VIEW] Found {symbol} in multi_view_data_backup")
-        # Then check ticker_data
-        elif symbol in self.ticker_data:
-            state = self.ticker_data[symbol]
-            print(f"[SHOW_MULTI_VIEW] Found {symbol} in ticker_data")
-        else:
-            print(f"[SHOW_MULTI_VIEW] No data found for {symbol}")
+    # Defer data restoration to avoid blocking the UI
+    # This allows the view to appear immediately
+    def restore_multi_view_data():
+        """Restore data for multi-view (called after view is shown)"""
+        # Repopulate tables and prices for tickers that already have data
+        # This ensures data persists when switching back from single view
+        # IMPORTANT: Only use data that was NOT fetched in single view
+        # Optimize: Batch updates and defer non-critical operations
         
-        if state and symbol in self.ticker_tabs:
-            ui = self.ticker_tabs[symbol]
-            print(f"[SHOW_MULTI_VIEW] Found UI for {symbol}, checking state...")
+        # First, get the currently visible tab to prioritize its update
+        visible_symbol = None
+        if hasattr(self, 'notebook') and self.notebook:
+            try:
+                selected_tab_id = self.notebook.select()
+                if selected_tab_id:
+                    visible_symbol = self.notebook.tab(selected_tab_id, "text")
+            except:
+                pass
+        
+        # Collect symbols that need updates (prioritize visible one)
+        symbols_to_update = []
+        for symbol in self.preset_tickers:
+            # Check backup first (multi-view data that was preserved when single-view overwrote it)
+            state = None
+            if hasattr(self, 'multi_view_data_backup') and symbol in self.multi_view_data_backup:
+                state = self.multi_view_data_backup[symbol]
+            # Then check ticker_data
+            elif symbol in self.ticker_data:
+                state = self.ticker_data[symbol]
             
-            # Skip if this data was fetched in single view (has _from_single_view flag)
-            if hasattr(state, '_from_single_view') and state._from_single_view:
-                # This data is from single view, don't use it for multi-view
-                print(f"[SHOW_MULTI_VIEW] Skipping {symbol} - data is from single view")
-                continue
+            if state and symbol in self.ticker_tabs:
+                ui = self.ticker_tabs[symbol]
+                
+                # Skip if this data was fetched in single view (has _from_single_view flag)
+                if hasattr(state, '_from_single_view') and state._from_single_view:
+                    continue
+                
+                # Only update if this is a multi-view entry (not single view)
+                is_single_view_entry = ui.get("_is_single_view") or "ticker_var" in ui
+                if is_single_view_entry:
+                    # Recreate the multi-view entry for this symbol
+                    if symbol in self.preset_tickers:
+                        create_stock_tab(self, symbol)
+                        ui = self.ticker_tabs.get(symbol)
+                        if not ui:
+                            continue
+                
+                # Prioritize visible symbol
+                if symbol == visible_symbol:
+                    symbols_to_update.insert(0, (symbol, state, ui))
+                else:
+                    symbols_to_update.append((symbol, state, ui))
+        
+        # Update visible tab immediately, defer others
+        def update_symbol_data(symbol, state, ui, delay=0):
+            def do_update():
+                # Update price
+                if state.price > 0:
+                    ui["price_var"].set(f"${state.price:.2f}")
+                
+                # Update expiration dropdown and table if data exists
+                if state.exp_data_map:
+                    expirations = list(state.exp_data_map.keys())
+                    if expirations:
+                        expirations.sort()
+                        ui["exp_dropdown"].configure(values=expirations)
+                        
+                        current_exp = ui["exp_var"].get()
+                        if current_exp and current_exp in expirations:
+                            ui["exp_var"].set(current_exp)
+                        else:
+                            ui["exp_var"].set(expirations[0])
+                        
+                        # Defer table update to avoid blocking
+                        # Capture values in closure to avoid late binding issues
+                        exp_val = ui["exp_var"].get()
+                        self.root.after(delay + 10, lambda s=symbol, e=exp_val: self.update_table_for_symbol(s, e))
             
-            print(f"[SHOW_MULTI_VIEW] Restoring data for {symbol}...")
-            
-            # Only update if this is a multi-view entry (not single view)
-            # Single view entries use the key format "_single_{symbol}"
-            # Multi-view entries use just the symbol as the key
-            is_single_view_entry = ui.get("_is_single_view") or "ticker_var" in ui
-            if is_single_view_entry:
-                # This is a single view entry, skip it - multi-view should have its own entry
-                # If single view overwrote the multi-view entry, we need to recreate it
-                # Recreate the multi-view entry for this symbol
-                if symbol in self.preset_tickers:
-                    # Recreate the tab to get a fresh multi-view entry
-                    create_stock_tab(self, symbol)
-                    # Get the newly created entry
-                    ui = self.ticker_tabs.get(symbol)
-                    if not ui:
-                        continue
-            
-            # Update price
-            if state.price > 0:
-                ui["price_var"].set(f"${state.price:.2f}")
-            
-            # Update expiration dropdown and table if data exists
-            if state.exp_data_map:
-                expirations = list(state.exp_data_map.keys())
-                if expirations:
-                    # Sort expirations (they should already be normalized)
-                    expirations.sort()
-                    ui["exp_dropdown"].configure(values=expirations)
-                    
-                    # Set expiration (use existing if available, otherwise first)
-                    current_exp = ui["exp_var"].get()
-                    if current_exp and current_exp in expirations:
-                        ui["exp_var"].set(current_exp)
-                    else:
-                        ui["exp_var"].set(expirations[0])
-                    
-                    # Repopulate table with data
-                    print(f"[SHOW_MULTI_VIEW] Calling update_table_for_symbol for {symbol} with expiration {ui['exp_var'].get()}")
-                    self.update_table_for_symbol(symbol, ui["exp_var"].get())
-                    print(f"[SHOW_MULTI_VIEW] Completed restoration for {symbol}")
-        elif state:
-            print(f"[SHOW_MULTI_VIEW] Has state for {symbol} but no UI in ticker_tabs (key not found)")
+            if delay == 0:
+                do_update()
+            else:
+                self.root.after(delay, do_update)
+        
+        # Update visible symbol immediately, others with increasing delays
+        for i, (symbol, state, ui) in enumerate(symbols_to_update):
+            update_symbol_data(symbol, state, ui, delay=i * 20)  # 20ms between each update
     
-    print(f"[SHOW_MULTI_VIEW] Finished data restoration")
+    self.root.after(50, restore_multi_view_data)
 
 def show_single_view(self):
     """Show the single ticker view"""
