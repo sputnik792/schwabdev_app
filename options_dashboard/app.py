@@ -18,7 +18,8 @@ def initialize_app():
     from data.schwab_auth import (
         perform_pending_reset,
         schwab_tokens_exist,
-        create_authenticated_client
+        create_authenticated_client,
+        is_refresh_token_valid
     )
     
     # Load theme from state, default to first available theme if not set
@@ -33,7 +34,7 @@ def initialize_app():
     
     perform_pending_reset()
     
-    return AuthMenu, Dashboard, get_state_value, save_app_state, STATE_FILE, schwab_tokens_exist, create_authenticated_client
+    return AuthMenu, Dashboard, get_state_value, save_app_state, STATE_FILE, schwab_tokens_exist, create_authenticated_client, is_refresh_token_valid
 
 # -----------------------------
 # Root window (create early for faster UI appearance)
@@ -44,7 +45,7 @@ root.geometry("1400x700")
 root.minsize(1200, 650)
 
 # Initialize app components (deferred to after window creation)
-AuthMenu, Dashboard, get_state_value, save_app_state, STATE_FILE, schwab_tokens_exist, create_authenticated_client = initialize_app()
+AuthMenu, Dashboard, get_state_value, save_app_state, STATE_FILE, schwab_tokens_exist, create_authenticated_client, is_refresh_token_valid = initialize_app()
 from style.custom_theme_controller import list_available_themes
 
 def start_dashboard(client):
@@ -63,19 +64,24 @@ def start_dashboard(client):
     Dashboard(root, client)
 
 if schwab_tokens_exist():
-    # Create app_state.json if it doesn't exist (for users upgrading)
-    if not os.path.exists(STATE_FILE):
-        # Use cached themes if available
-        themes = list_available_themes()
-        default_theme = themes[0] if themes else "breeze"
-        initial_state = {
-            "color_theme": default_theme,
-            "exposure_model": "Gamma"
-        }
-        save_app_state(initial_state)
-    
-    client = create_authenticated_client()
-    Dashboard(root, client)
+    # Check if refresh token is still valid
+    if is_refresh_token_valid():
+        # Create app_state.json if it doesn't exist (for users upgrading)
+        if not os.path.exists(STATE_FILE):
+            # Use cached themes if available
+            themes = list_available_themes()
+            default_theme = themes[0] if themes else "breeze"
+            initial_state = {
+                "color_theme": default_theme,
+                "exposure_model": "Gamma"
+            }
+            save_app_state(initial_state)
+        
+        client = create_authenticated_client()
+        Dashboard(root, client)
+    else:
+        # Refresh token has expired, show login window
+        auth = AuthMenu(root, start_dashboard)
 else:
     auth = AuthMenu(root, start_dashboard)
 

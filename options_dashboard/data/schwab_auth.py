@@ -56,6 +56,37 @@ def schwab_tokens_exist():
     token_dir = os.path.expanduser("~/.schwabdev")
     token_db = os.path.join(token_dir, "tokens.db")
     return os.path.exists(token_db)
+
+def is_refresh_token_valid():
+    """
+    Check if the refresh token is valid by attempting to create a client
+    and make a simple API call. Returns True if valid, False if expired/invalid.
+    """
+    if not schwab_tokens_exist():
+        return False
+    
+    try:
+        client = create_authenticated_client()
+        # Try a simple API call to validate the token
+        # Using a lightweight endpoint to check authentication
+        from data.schwab_api import safe_call
+        # Try fetching a quote for a common symbol (SPY) to validate token
+        # This is a lightweight call that requires authentication
+        try:
+            safe_call(client.quotes, "SPY")
+            return True
+        except RuntimeError as e:
+            if str(e) == "AUTH_REQUIRED":
+                return False
+            # If it's not an auth error, assume token is valid (might be network issue, etc.)
+            return True
+        except Exception:
+            # If we can't determine (network error, etc.), assume valid
+            # (better to let user try than block them)
+            return True
+    except Exception:
+        # If we can't create a client, assume invalid
+        return False
 # -----------------------------
 # Token reset (Windows-safe)
 # -----------------------------
