@@ -521,13 +521,79 @@ def build_sidebar(self):
                     dialogs.info("No Charts", "No active charts to merge.")
                     return
                 
-                # Merge charts for each ticker
-                for ticker in sorted(tickers_with_charts):
+                # Show in-progress dialog (red background)
+                total_tickers = len(tickers_with_charts)
+                progress_dialog = dialogs.show_fetching_dialog(
+                    self.root,
+                    "Merging Charts",
+                    f"Merging charts for {total_tickers} ticker(s)...\nPlease wait."
+                )
+                
+                # Store reference to progress label for updates
+                progress_label = None
+                for widget in progress_dialog.winfo_children():
+                    if isinstance(widget, tk.Frame):
+                        for child in widget.winfo_children():
+                            if isinstance(child, ttk.Label):
+                                progress_label = child
+                                break
+                        if progress_label:
+                            break
+                
+                # Merge charts for each ticker using deferred execution on main thread
+                # This allows UI updates and prevents blocking
+                sorted_tickers = sorted(tickers_with_charts)
+                successful = [0]  # Use list to allow modification in nested functions
+                failed = [0]
+                
+                def process_next_ticker(index=0):
+                    if index >= len(sorted_tickers):
+                        # All done - close progress dialog and show completion
+                        try:
+                            if progress_dialog and progress_dialog.winfo_exists():
+                                progress_dialog.destroy()
+                        except:
+                            pass
+                        
+                        # Show completion dialog (green background)
+                        if successful[0] > 0:
+                            message = f"Successfully merged charts for {successful[0]} ticker(s)."
+                            if failed[0] > 0:
+                                message += f"\n{failed[0]} ticker(s) failed to merge."
+                            dialogs.show_timed_message(
+                                self.root,
+                                "Merge Complete",
+                                message,
+                                duration_ms=3000
+                            )
+                        else:
+                            dialogs.error("Merge Failed", "Failed to merge charts for all tickers.")
+                        return
+                    
+                    ticker = sorted_tickers[index]
+                    
+                    # Update progress message
+                    if progress_dialog and progress_dialog.winfo_exists() and progress_label:
+                        try:
+                            progress_label.config(
+                                text=f"Merging charts for {ticker}...\n({index+1}/{total_tickers})"
+                            )
+                        except:
+                            pass
+                    
+                    # Perform the merge
                     try:
                         merge_ticker_charts_to_new_window(self, ticker)
+                        successful[0] += 1
                     except Exception as e:
                         print(f"Error merging charts for {ticker}: {e}")
-                        continue
+                        failed[0] += 1
+                    
+                    # Process next ticker after a short delay to keep UI responsive
+                    self.root.after(50, lambda idx=index+1: process_next_ticker(idx))
+                
+                # Start processing (first ticker immediately, others deferred)
+                self.root.after(100, lambda: process_next_ticker(0))
         
         # Check if charts exist to enable/disable menu items
         has_charts = has_active_chart_windows(self)
