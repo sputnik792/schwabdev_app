@@ -359,6 +359,10 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                     print(f"[SINGLE VIEW SAVE] Created ticker_tabs entry with key: {single_view_key}")
                     print(f"[SINGLE VIEW SAVE] ticker_tabs keys: {list(dashboard.ticker_tabs.keys())}")
                     
+                    # Update Info button state
+                    if hasattr(dashboard, 'update_info_button_state'):
+                        dashboard.update_info_button_state()
+                    
                     # Update expiration dropdown - ONLY update single view's components
                     if expirations:
                         # Hide "Options N/A" message if it exists
@@ -456,6 +460,9 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                     try:
                         dashboard.single_view_symbol = symbol
                         print(f"[SINGLE VIEW SAVE] Set single_view_symbol to: {symbol} (after error)")
+                        # Update Info button state
+                        if hasattr(dashboard, 'update_info_button_state'):
+                            dashboard.update_info_button_state()
                     except:
                         pass
 
@@ -600,6 +607,10 @@ def load_csv_index_data(self):
                 # Extract base symbol from display_symbol (remove " (CSV)" if present)
                 base_symbol = display_symbol.replace(" (CSV)", "")
                 self.single_view_symbol = base_symbol
+                
+                # Update Info button state
+                if hasattr(self, 'update_info_button_state'):
+                    self.update_info_button_state()
                 
                 # Use the proper single view key format: "_single_{symbol}"
                 # Use base_symbol for the key to avoid issues with "(CSV)" in keys

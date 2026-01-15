@@ -108,6 +108,9 @@ def build_layout(self):
                 set_state_value("view_mode", "single")
                 if hasattr(self, 'show_single_view'):
                     self.show_single_view()
+            # Update Info button state after view change
+            if hasattr(self, 'update_info_button_state'):
+                self.update_info_button_state()
     
     self.view_toggle = ctk.CTkSwitch(
         toggle_frame,
@@ -121,10 +124,9 @@ def build_layout(self):
         self.view_toggle.select()
     ctk.CTkLabel(toggle_frame, text="Multi", font=fonts["sm"]).pack(side="left", padx=(5, 0))
 
-    # Info button - far right
-    def show_ticker_info():
-        """Show information about the currently selected ticker"""
-        # Get current ticker based on view mode
+    # Helper function to get current ticker
+    def get_current_ticker():
+        """Get the currently selected ticker symbol, or None if no ticker is selected"""
         current_ticker = None
         
         # Check if we're in single view
@@ -135,7 +137,10 @@ def build_layout(self):
         if is_single_view:
             # Single view mode
             if hasattr(self, 'single_view_symbol') and self.single_view_symbol:
-                current_ticker = self.single_view_symbol.strip().upper()
+                ticker = self.single_view_symbol.strip().upper()
+                # Check if it's not a placeholder
+                if ticker and ticker != "_SINGLE_VIEW_PLACEHOLDER":
+                    current_ticker = ticker
         else:
             # Multi view mode - get from selected tab
             if hasattr(self, 'notebook') and self.notebook:
@@ -145,6 +150,23 @@ def build_layout(self):
                         current_ticker = self.notebook.tab(selected_tab_id, "text").strip().upper()
                 except:
                     pass
+        
+        return current_ticker
+    
+    # Function to update Info button state
+    def update_info_button_state():
+        """Enable/disable Info button based on whether a ticker is selected"""
+        if hasattr(self, 'info_button'):
+            current_ticker = get_current_ticker()
+            if current_ticker:
+                self.info_button.configure(state="normal")
+            else:
+                self.info_button.configure(state="disabled")
+    
+    # Info button - far right
+    def show_ticker_info():
+        """Show information about the currently selected ticker"""
+        current_ticker = get_current_ticker()
         
         if not current_ticker:
             dialogs.warning("No Ticker Selected", "Please select a ticker to view information.")
@@ -263,9 +285,14 @@ def build_layout(self):
         width=80,
         height=30,
         fg_color="transparent",
-        hover_color=ACCENT_PRIMARY if not is_light_mode() else "#e5e7eb"
+        hover_color=ACCENT_PRIMARY if not is_light_mode() else "#e5e7eb",
+        state="disabled"  # Start disabled until a ticker is selected
     )
     info_button.pack(side="right", padx=12)
+    
+    # Store reference to Info button for state updates
+    self.info_button = info_button
+    self.update_info_button_state = update_info_button_state
 
     # ---------- Main ----------
     self.main = ctk.CTkFrame(self)
@@ -1012,6 +1039,13 @@ def show_multi_view(self):
     if hasattr(self, 'rebuild_tabs'):
         self.rebuild_tabs()
         self.root.update_idletasks()  # Update UI after tabs are created
+        
+        # Bind to notebook tab change event to update Info button
+        if hasattr(self, 'notebook') and self.notebook:
+            def on_tab_changed(event=None):
+                if hasattr(self, 'update_info_button_state'):
+                    self.update_info_button_state()
+            self.notebook.bind("<<NotebookTabChanged>>", on_tab_changed)
     
     # Restore the previously selected tab if it was saved
     if hasattr(self, '_saved_multi_view_symbol') and self._saved_multi_view_symbol:
@@ -1035,6 +1069,10 @@ def show_multi_view(self):
                         self.notebook.select(0)
                     except:
                         pass
+    
+    # Update Info button state after multi-view is shown
+    if hasattr(self, 'update_info_button_state'):
+        self.update_info_button_state()
     
     # Defer data restoration to avoid blocking the UI
     # This allows the view to appear immediately
@@ -1494,6 +1532,10 @@ def show_single_view(self):
     
     # Show single view
     self.single_view.pack(fill="both", expand=True)
+    
+    # Update Info button state after single-view is shown
+    if hasattr(self, 'update_info_button_state'):
+        self.update_info_button_state()
     
     # Single view should be independent - don't auto-populate from multi-view data
     # Only show data that was explicitly fetched in single view
