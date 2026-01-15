@@ -121,6 +121,152 @@ def build_layout(self):
         self.view_toggle.select()
     ctk.CTkLabel(toggle_frame, text="Multi", font=fonts["sm"]).pack(side="left", padx=(5, 0))
 
+    # Info button - far right
+    def show_ticker_info():
+        """Show information about the currently selected ticker"""
+        # Get current ticker based on view mode
+        current_ticker = None
+        
+        # Check if we're in single view
+        is_single_view = (hasattr(self, 'single_view') and 
+                          self.single_view is not None and 
+                          self.single_view.winfo_viewable())
+        
+        if is_single_view:
+            # Single view mode
+            if hasattr(self, 'single_view_symbol') and self.single_view_symbol:
+                current_ticker = self.single_view_symbol.strip().upper()
+        else:
+            # Multi view mode - get from selected tab
+            if hasattr(self, 'notebook') and self.notebook:
+                try:
+                    selected_tab_id = self.notebook.select()
+                    if selected_tab_id:
+                        current_ticker = self.notebook.tab(selected_tab_id, "text").strip().upper()
+                except:
+                    pass
+        
+        if not current_ticker:
+            dialogs.warning("No Ticker Selected", "Please select a ticker to view information.")
+            return
+        
+        # Remove "(CSV)" suffix if present for lookup
+        base_ticker = current_ticker.replace(" (CSV)", "")
+        
+        # Load ticker info from JSON
+        import json
+        import os
+        
+        # Get path to options_dashboard directory (3 levels up from ui/dashboard/layout.py)
+        options_dashboard_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        json_path = os.path.join(options_dashboard_dir, "US_stock_symbols_verbose.json")
+        
+        ticker_info = None
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                # Find the ticker in the data
+                for item in data:
+                    if item.get("symbol", "").upper() == base_ticker.upper():
+                        ticker_info = item
+                        break
+        except Exception as e:
+            print(f"Error loading ticker info: {e}")
+            dialogs.error("Error", f"Failed to load ticker information: {e}")
+            return
+        
+        # Create info window
+        info_window = ctk.CTkToplevel(self.root)
+        info_window.title(f"Ticker Information - {base_ticker}")
+        info_window.geometry("500x400")
+        info_window.transient(self.root)
+        
+        # Center window
+        info_window.update_idletasks()
+        screen_w = info_window.winfo_screenwidth()
+        screen_h = info_window.winfo_screenheight()
+        win_w = info_window.winfo_width()
+        win_h = info_window.winfo_height()
+        x = (screen_w // 2) - (win_w // 2)
+        y = (screen_h // 2) - (win_h // 2)
+        info_window.geometry(f"{win_w}x{win_h}+{x}+{y}")
+        
+        # Create scrollable frame for content
+        scrollable_frame = ctk.CTkScrollableFrame(info_window)
+        scrollable_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        # Title
+        title_label = ctk.CTkLabel(
+            scrollable_frame,
+            text=f"Ticker Information",
+            font=ctk.CTkFont(size=24, weight="bold")
+        )
+        title_label.pack(pady=(0, 20))
+        
+        # Helper function to get value or N/A
+        def get_value(key, default="N/A"):
+            if ticker_info and key in ticker_info:
+                value = ticker_info[key]
+                if value and str(value).strip():
+                    return str(value).strip()
+            return default
+        
+        # Display information fields
+        info_fields = [
+            ("Ticker", base_ticker),
+            ("Company Name", get_value("name")),
+            ("IPO Year", get_value("ipoyear")),
+            ("Industry", get_value("industry")),
+            ("Sector", get_value("sector"))
+        ]
+        
+        for label_text, value_text in info_fields:
+            # Create frame for each field
+            field_frame = ctk.CTkFrame(scrollable_frame, fg_color="transparent")
+            field_frame.pack(fill="x", pady=8)
+            
+            # Label
+            label = ctk.CTkLabel(
+                field_frame,
+                text=f"{label_text}:",
+                font=ctk.CTkFont(size=14, weight="bold"),
+                anchor="w",
+                width=120
+            )
+            label.pack(side="left", padx=(0, 10))
+            
+            # Value
+            value_label = ctk.CTkLabel(
+                field_frame,
+                text=value_text,
+                font=ctk.CTkFont(size=14),
+                anchor="w",
+                wraplength=300
+            )
+            value_label.pack(side="left", fill="x", expand=True)
+        
+        # Close button
+        close_button = ctk.CTkButton(
+            info_window,
+            text="Close",
+            command=info_window.destroy,
+            width=120,
+            height=35
+        )
+        close_button.pack(pady=10)
+    
+    info_button = ctk.CTkButton(
+        top,
+        text="Info",
+        font=fonts["lg"],
+        command=show_ticker_info,
+        width=80,
+        height=30,
+        fg_color="transparent",
+        hover_color=ACCENT_PRIMARY if not is_light_mode() else "#e5e7eb"
+    )
+    info_button.pack(side="right", padx=12)
+
     # ---------- Main ----------
     self.main = ctk.CTkFrame(self)
     self.main.pack(fill="both", expand=True, padx=12, pady=(0, 12))
