@@ -3,7 +3,7 @@ import numpy as np
 import json
 import os
 import datetime
-from options_dashboard.utils.expiration import normalize_expiration
+from options_dashboard.utils.expiration import normalize_expiration, format_expiration_with_days
 
 def load_csv_index(
     symbol,
@@ -101,7 +101,8 @@ def load_csv_index(
         if pd.isna(exp_date):
             continue
 
-        exp_key = normalize_expiration(exp_date)
+        # Use format_expiration_with_days for both key and display (consistent with API data format)
+        exp_key = format_expiration_with_days(exp_date)
         expirations.append(exp_key)
 
         clean_df = pd.DataFrame({
