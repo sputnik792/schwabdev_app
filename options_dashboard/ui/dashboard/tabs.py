@@ -147,6 +147,52 @@ def rebuild_tabs(self):
     
     for symbol in self.preset_tickers:
         create_stock_tab(self, symbol)
+    
+    # Restore data for symbols that already have data
+    # This ensures data persists when tabs are rebuilt (e.g., when adding new tickers)
+    def restore_data_after_rebuild():
+        for symbol in self.preset_tickers:
+            if symbol in self.ticker_tabs:
+                ui = self.ticker_tabs[symbol]
+                
+                # Check if we have data for this symbol
+                # Check backup first (multi-view data that was preserved when single-view overwrote it)
+                state = None
+                if hasattr(self, 'multi_view_data_backup') and symbol in self.multi_view_data_backup:
+                    state = self.multi_view_data_backup[symbol]
+                # Then check ticker_data
+                elif symbol in self.ticker_data:
+                    state = self.ticker_data[symbol]
+                
+                if state:
+                    # Skip if this data was fetched in single view (has _from_single_view flag)
+                    if hasattr(state, '_from_single_view') and state._from_single_view:
+                        continue
+                    
+                    # Update price
+                    if state.price > 0:
+                        ui["price_var"].set(f"${state.price:.2f}")
+                    
+                    # Update expiration dropdown and table if data exists
+                    if state.exp_data_map:
+                        expirations = list(state.exp_data_map.keys())
+                        if expirations:
+                            expirations.sort()
+                            ui["exp_dropdown"].configure(values=expirations)
+                            
+                            # Try to restore previously selected expiration, or use first
+                            current_exp = ui["exp_var"].get()
+                            if current_exp and current_exp in expirations:
+                                ui["exp_var"].set(current_exp)
+                            else:
+                                ui["exp_var"].set(expirations[0])
+                            
+                            # Update table with the selected expiration
+                            self.update_table_for_symbol(symbol, ui["exp_var"].get())
+    
+    # Defer restoration to allow UI to update first
+    if hasattr(self, 'root'):
+        self.root.after(50, restore_data_after_rebuild)
 
 def create_stock_tab(self, symbol):
     fonts = get_fonts()
