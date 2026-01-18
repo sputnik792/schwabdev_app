@@ -92,25 +92,40 @@ def compute_bar_width(strikes):
         return spacing * 0.25
 
 def compute_xticks(strikes):
-    strikes = sorted(strikes)
+    strikes = sorted([float(s) for s in strikes])
     if len(strikes) < 2:
         return strikes
 
-    spacing = strikes[1] - strikes[0]
+    # Calculate spacing between consecutive strikes
+    spacings = [strikes[i+1] - strikes[i] for i in range(len(strikes)-1)]
+    if not spacings:
+        return strikes
+    
+    # Find the most common spacing (round to nearest 0.5 for grouping)
+    # This handles cases where majority of strikes are spaced by 5, even if some have different spacing
+    from collections import Counter
+    rounded_spacings = [round(spacing * 2) / 2 for spacing in spacings]
+    spacing_counts = Counter(rounded_spacings)
+    most_common_spacing = spacing_counts.most_common(1)[0][0]
+    
+    spacing = float(most_common_spacing)
 
+    # Determine interval based on majority spacing
     if spacing <= 1:
         interval = 2
     elif spacing <= 2.5:
         interval = 5
     elif spacing <= 5:
-        interval = 10
+        interval = 10  # For 5-dollar spacing, show ticks every 10
     else:
-        interval = spacing * 2
+        interval = int(float(spacing) * 2)
 
-    start = int(strikes[0] // interval) * interval
-    end = int((strikes[-1] + interval) // interval) * interval
+    # Generate ticks based on interval, covering the full range
+    start = int(float(strikes[0]) // interval) * interval
+    end = int((float(strikes[-1]) + interval) // interval) * interval
 
-    return list(range(start, end + interval, interval))
+    # Convert to int for range() to handle numpy types
+    return list(range(int(start), int(end + interval), int(interval)))
 
 def embed_matplotlib_chart(
     parent,
