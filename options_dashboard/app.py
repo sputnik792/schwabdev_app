@@ -31,7 +31,7 @@ def initialize_app():
     
     if THEME_NAME:
         set_color_theme(THEME_NAME)
-    
+        
     perform_pending_reset()
     
     return AuthMenu, Dashboard, get_state_value, save_app_state, STATE_FILE, schwab_tokens_exist, create_authenticated_client, is_refresh_token_valid

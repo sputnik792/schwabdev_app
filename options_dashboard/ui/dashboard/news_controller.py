@@ -9,6 +9,7 @@ from typing import Optional
 import customtkinter as ctk
 
 from data.news_enrichment import NewsEnrichmentController, NewsEnrichmentResult
+from data.news_scraper import lookup_company_name
 from style.theme import ACCENT_SUCCESS, TEXT_MUTED
 from ui import dialogs
 from ui.dashboard.headline_news_window import open_headline_news_window
@@ -57,7 +58,8 @@ def start_headline_news_enrichment(dashboard, symbol: str) -> None:
     if not symbol:
         return
     ctrl = ensure_news_controller(dashboard)
-    ctrl.start(symbol)
+    company_name = lookup_company_name(symbol)
+    ctrl.start(symbol, company_name=company_name)
     update_headline_news_button_state(dashboard, symbol=symbol)
 
 

@@ -7,11 +7,12 @@ Used by the standalone news test window and (later) the main dashboard.
 from __future__ import annotations
 
 import threading
+import webbrowser
 from typing import Callable, List, Optional
 
 import customtkinter as ctk
 
-from data.news_scraper import NewsArticle, NewsFetchResult, fetch_stock_news
+from data.news_scraper import NewsArticle, NewsFetchResult, fetch_stock_news, format_local_datetime
 from style.theme import ACCENT_PRIMARY, TEXT_MUTED, TEXT_SECONDARY, get_fonts
 from ui.dashboard.news_summary_window import open_article_summary_window
 
@@ -94,7 +95,7 @@ class NewsPanel(ctk.CTkFrame):
         symbol = result.symbol or "—"
         self.title_label.configure(text=f"{symbol}  ·  News")
         count = len(result.articles)
-        fetched = result.fetched_at.astimezone().strftime("%I:%M:%S %p")
+        fetched = format_local_datetime(result.fetched_at, fmt="%I:%M:%S %p")
         self.meta_label.configure(text=f"{count} articles  ·  {fetched}")
 
         if not result.articles:
@@ -163,6 +164,17 @@ class NewsPanel(ctk.CTkFrame):
             text_color=TEXT_MUTED,
             anchor="w",
         ).pack(side="left")
+
+        ctk.CTkButton(
+            actions,
+            text="Open",
+            width=72,
+            height=28,
+            font=fonts["sm"],
+            fg_color="transparent",
+            border_width=1,
+            command=lambda url=article.link: webbrowser.open(url),
+        ).pack(side="right")
 
         if article.summary:
             summary = article.summary

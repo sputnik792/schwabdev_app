@@ -4,9 +4,12 @@ Dashboard Headline News window — preloaded LLM summaries + sentiment.
 
 from __future__ import annotations
 
+import webbrowser
+
 import customtkinter as ctk
 
 from data.news_enrichment import EnrichedArticle, NewsEnrichmentResult
+from data.news_scraper import format_local_datetime
 from style.theme import ACCENT_PRIMARY, ACCENT_SUCCESS, TEXT_MUTED, TEXT_SECONDARY, get_fonts
 from ui.dashboard.news_summary_window import open_enriched_article_window
 
@@ -45,7 +48,7 @@ def open_headline_news_window(
     count = len(result.articles)
     when = ""
     if result.fetched_at:
-        when = result.fetched_at.astimezone().strftime("%I:%M:%S %p")
+        when = format_local_datetime(result.fetched_at, fmt="%I:%M:%S %p")
     meta_bits = [f"{count} article(s)"]
     if when:
         meta_bits.append(when)
@@ -151,6 +154,28 @@ def _make_card(parent, win, enriched: EnrichedArticle, fonts) -> ctk.CTkFrame:
         text_color=(ACCENT_PRIMARY, ACCENT_PRIMARY),
         command=lambda e=enriched: open_enriched_article_window(win, e),
     ).pack(fill="x", padx=8, pady=(0, 4))
+
+    actions = ctk.CTkFrame(card, fg_color="transparent")
+    actions.pack(fill="x", padx=12, pady=(0, 4))
+
+    ctk.CTkLabel(
+        actions,
+        text="Click headline for LLM summary",
+        font=fonts["sm"],
+        text_color=TEXT_MUTED,
+        anchor="w",
+    ).pack(side="left")
+
+    ctk.CTkButton(
+        actions,
+        text="Open",
+        width=72,
+        height=28,
+        font=fonts["sm"],
+        fg_color="transparent",
+        border_width=1,
+        command=lambda url=enriched.open_url: webbrowser.open(url),
+    ).pack(side="right")
 
     preview = (enriched.llm_summary or enriched.article.summary or enriched.error or "").strip()
     if preview:
