@@ -3,7 +3,15 @@ import datetime
 from tkinter import filedialog
 
 from state.ticker_state import TickerState
-from data.schwab_api import fetch_stock_price, fetch_option_chain
+from state.strike_count_prefs import (
+    save_strike_count_label,
+    persisted_strike_count_label,
+)
+from data.schwab_api import (
+    fetch_stock_price,
+    fetch_option_chain,
+    strike_count_label_to_api,
+)
 from data.csv_loader import load_csv_index
 from data.ticker_history import record_ticker_search
 from ui import dialogs
@@ -13,23 +21,161 @@ from utils.time import time_to_expiration
 from config import RISK_FREE_RATE
 from tksheet import Sheet
 
+
+def get_strike_count_label(dashboard, symbol):
+    symbol = symbol.upper()
+    state = dashboard.ticker_data.get(symbol)
+    if state and getattr(state, "strike_count_label", None):
+        return state.strike_count_label
+
+    for key in (symbol, f"_single_{symbol}"):
+        ui = dashboard.ticker_tabs.get(key)
+        if ui and ui.get("strike_var"):
+            val = ui["strike_var"].get()
+            if val:
+                return val
+
+    return persisted_strike_count_label(symbol)
+
+
+def fetch_exp_map_with_prob_itm(client, symbol, price, strike_label):
+    api_count = strike_count_label_to_api(strike_label)
+    exp_map, expirations = fetch_option_chain(client, symbol, strike_count=api_count)
+
+    for exp_date in expirations:
+        df = exp_map.get(exp_date)
+        if df is not None and not df.empty:
+            T = time_to_expiration(exp_date)
+            exp_map[exp_date] = calculate_prob_itm(df, price, T, RISK_FREE_RATE)
+
+    return exp_map, expirations
+
+
+def on_strike_count_change(dashboard, tab_key, strike_label):
+    actual_symbol = (
+        tab_key.replace("_single_", "", 1)
+        if tab_key.startswith("_single_")
+        else tab_key
+    )
+    if not actual_symbol:
+        return
+
+    prev_label = get_strike_count_label(dashboard, actual_symbol)
+    if strike_label == prev_label:
+        return
+
+    save_strike_count_label(actual_symbol, strike_label)
+
+    ui = dashboard.ticker_tabs.get(tab_key)
+    if ui and ui.get("strike_var"):
+        ui["strike_var"].set(strike_label)
+
+    if tab_key.startswith("_single_") and hasattr(dashboard, "single_view_strike_var"):
+        dashboard.single_view_strike_var.set(strike_label)
+
+    state = dashboard.ticker_data.get(actual_symbol)
+    if not state or not state.exp_data_map:
+        return
+
+    fetching_dialog = dialogs.show_fetching_dialog(
+        dashboard.root,
+        "Updating Strikes",
+        f"Fetching {strike_label} strikes for {actual_symbol}...",
+    )
+
+    def close_fetching_dialog():
+        try:
+            if fetching_dialog and fetching_dialog.winfo_exists():
+                fetching_dialog.destroy()
+        except Exception:
+            pass
+
+    def worker():
+        try:
+            price = state.price if state.price else fetch_stock_price(dashboard.client, actual_symbol)
+            exp_map, expirations = fetch_exp_map_with_prob_itm(
+                dashboard.client, actual_symbol, price, strike_label
+            )
+
+            new_state = TickerState(
+                symbol=actual_symbol,
+                price=price,
+                exp_data_map=exp_map,
+                last_updated=datetime.datetime.now(),
+                strike_count_label=strike_label,
+            )
+            if state and getattr(state, "_from_single_view", False):
+                new_state._from_single_view = True
+
+            def update_ui():
+                close_fetching_dialog()
+                dashboard.ticker_data[actual_symbol] = new_state
+
+                if not expirations:
+                    dialogs.show_timed_message(
+                        dashboard.root,
+                        "No Options Data",
+                        f"No options data returned for {actual_symbol}.",
+                        duration_ms=2500,
+                    )
+                    return
+
+                for key in (actual_symbol, f"_single_{actual_symbol}"):
+                    tab_ui = dashboard.ticker_tabs.get(key)
+                    if not tab_ui:
+                        continue
+                    if tab_ui.get("strike_var"):
+                        tab_ui["strike_var"].set(strike_label)
+                    tab_ui["exp_dropdown"].configure(values=expirations)
+                    prev_exp = tab_ui["exp_var"].get()
+                    selected_exp = prev_exp if prev_exp in expirations else expirations[0]
+                    tab_ui["exp_var"].set(selected_exp)
+                    dashboard.update_table_for_symbol(key, selected_exp)
+
+                dialogs.show_timed_message(
+                    dashboard.root,
+                    "Strikes Updated",
+                    f"Loaded {strike_label} strikes for {actual_symbol}",
+                    duration_ms=2000,
+                )
+
+            dashboard.root.after(0, update_ui)
+
+        except RuntimeError as e:
+            if str(e) == "AUTH_REQUIRED":
+                def handle_auth():
+                    close_fetching_dialog()
+                    dialogs.error(
+                        "Authentication Required",
+                        "Schwab authentication expired.\nPlease reconnect.",
+                    )
+
+                dashboard.root.after(0, handle_auth)
+        except Exception as e:
+            def handle_error():
+                close_fetching_dialog()
+                dialogs.error("Fetch Error", f"{actual_symbol}: {e}")
+
+            dashboard.root.after(0, handle_error)
+
+    threading.Thread(target=worker, daemon=True).start()
+
+
 def fetch_worker(self, symbol):
     try:
+        strike_label = get_strike_count_label(self, symbol)
         price = fetch_stock_price(self.client, symbol)
-        exp_map, expirations = fetch_option_chain(self.client, symbol)
-
-        # Calculate Prob ITM for each expiration
-        for exp_date in expirations:
-            df = exp_map.get(exp_date)
-            if df is not None and not df.empty:
-                T = time_to_expiration(exp_date)
-                exp_map[exp_date] = calculate_prob_itm(df, price, T, RISK_FREE_RATE)
+        exp_map, expirations = fetch_exp_map_with_prob_itm(
+            self.client, symbol, price, strike_label
+        )
+        save_strike_count_label(symbol, strike_label)
 
         state = TickerState(
             symbol=symbol,
             price=price,
             exp_data_map=exp_map,
-            last_updated=datetime.datetime.now()
+            last_updated=datetime.datetime.now(),
+            strike_count_label=strike_label,
         )
 
         def update_ui():
@@ -55,6 +201,9 @@ def fetch_worker(self, symbol):
                 return
 
             ui["price_var"].set(f"${price:.2f}" if price else "—")
+
+            if ui.get("strike_var"):
+                ui["strike_var"].set(strike_label)
 
             if expirations:
                 ui["exp_dropdown"].configure(values=expirations)
@@ -141,21 +290,19 @@ def fetch_single_symbol(dashboard, symbol):
 
     def worker():
         try:
+            strike_label = get_strike_count_label(dashboard, symbol)
             price = fetch_stock_price(dashboard.client, symbol)
-            exp_map, expirations = fetch_option_chain(dashboard.client, symbol)
-
-            # Calculate Prob ITM for each expiration
-            for exp_date in expirations:
-                df = exp_map.get(exp_date)
-                if df is not None and not df.empty:
-                    T = time_to_expiration(exp_date)
-                    exp_map[exp_date] = calculate_prob_itm(df, price, T, RISK_FREE_RATE)
+            exp_map, expirations = fetch_exp_map_with_prob_itm(
+                dashboard.client, symbol, price, strike_label
+            )
+            save_strike_count_label(symbol, strike_label)
 
             state = TickerState(
                 symbol=symbol,
                 price=price,
                 exp_data_map=exp_map,
-                last_updated=datetime.datetime.now()
+                last_updated=datetime.datetime.now(),
+                strike_count_label=strike_label,
             )
 
             def update():
@@ -167,6 +314,8 @@ def fetch_single_symbol(dashboard, symbol):
 
                 ui = dashboard.ticker_tabs[symbol]
                 ui["price_var"].set(f"${price:.2f}")
+                if ui.get("strike_var"):
+                    ui["strike_var"].set(strike_label)
                 ui["exp_dropdown"].configure(values=expirations)
                 ui["exp_var"].set(expirations[0])
 
@@ -197,21 +346,19 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
 
     def worker():
         try:
+            strike_label = get_strike_count_label(dashboard, symbol)
             price = fetch_stock_price(dashboard.client, symbol)
-            exp_map, expirations = fetch_option_chain(dashboard.client, symbol)
-
-            # Calculate Prob ITM for each expiration
-            for exp_date in expirations:
-                df = exp_map.get(exp_date)
-                if df is not None and not df.empty:
-                    T = time_to_expiration(exp_date)
-                    exp_map[exp_date] = calculate_prob_itm(df, price, T, RISK_FREE_RATE)
+            exp_map, expirations = fetch_exp_map_with_prob_itm(
+                dashboard.client, symbol, price, strike_label
+            )
+            save_strike_count_label(symbol, strike_label)
 
             state = TickerState(
                 symbol=symbol,
                 price=price,
                 exp_data_map=exp_map,
-                last_updated=datetime.datetime.now()
+                last_updated=datetime.datetime.now(),
+                strike_count_label=strike_label,
             )
 
             def update():
@@ -342,6 +489,8 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                         "price_var": price_var,
                         "exp_var": exp_var,
                         "exp_dropdown": exp_dropdown,
+                        "strike_var": getattr(dashboard, "single_view_strike_var", None),
+                        "strike_dropdown": getattr(dashboard, "single_view_strike_dropdown", None),
                         "sheet": sheet,
                         "cols": cols,
                         "headers": single_view_ui.get("headers") if single_view_ui else None,
@@ -371,6 +520,8 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                         
                         exp_dropdown.configure(values=expirations)
                         exp_var.set(expirations[0])
+                        if hasattr(dashboard, "single_view_strike_var"):
+                            dashboard.single_view_strike_var.set(strike_label)
                         
                         # Update table - ONLY update single view entry's sheet directly
                         # The multi-view entry (if it exists) is completely untouched
@@ -442,6 +593,13 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                     if hasattr(dashboard, 'stats_breakdown_button'):
                         dashboard.stats_breakdown_button.configure(state="normal")
                     
+                    # Refresh Headline News button for this ticker
+                    try:
+                        from ui.dashboard.news_controller import update_headline_news_button_state
+                        update_headline_news_button_state(dashboard)
+                    except Exception:
+                        pass
+                    
                     # Record ticker search in history only on successful fetch
                     record_ticker_search(symbol)
                     
@@ -481,6 +639,14 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
 
     threading.Thread(target=worker, daemon=True).start()
 
+    # Prefetch headline news + LLM summaries in parallel with options fetch
+    try:
+        from ui.dashboard.news_controller import start_headline_news_enrichment
+        start_headline_news_enrichment(dashboard, symbol)
+    except Exception as e:
+        print(f"[NEWS] Failed to start headline enrichment for {symbol}: {e}")
+
+
 def fetch_all_stocks(self):
     # Initialize tracking for this fetch operation
     self.fetching_symbols = set(self.preset_tickers)
@@ -504,6 +670,12 @@ def fetch_all_stocks(self):
             args=(self, symbol),
             daemon=True
         ).start()
+        # Prefetch headline news + LLM for each ticker in parallel
+        try:
+            from ui.dashboard.news_controller import start_headline_news_enrichment
+            start_headline_news_enrichment(self, symbol)
+        except Exception as e:
+            print(f"[NEWS] Failed to start headline enrichment for {symbol}: {e}")
 
 def load_csv_index_data(self):
     symbol = self.csv_symbol_var.get()
@@ -640,6 +812,8 @@ def load_csv_index_data(self):
                         "price_var": self.single_view_price_var,
                         "exp_var": self.single_view_exp_var,
                         "exp_dropdown": self.single_view_exp_dropdown,
+                        "strike_var": getattr(self, "single_view_strike_var", None),
+                        "strike_dropdown": getattr(self, "single_view_strike_dropdown", None),
                         "sheet": sheet,
                         "cols": cols,
                         "headers": single_view_ui.get("headers") if single_view_ui else None,
@@ -662,6 +836,8 @@ def load_csv_index_data(self):
                         "price_var": self.single_view_price_var,
                         "exp_var": self.single_view_exp_var,
                         "exp_dropdown": self.single_view_exp_dropdown,
+                        "strike_var": getattr(self, "single_view_strike_var", None),
+                        "strike_dropdown": getattr(self, "single_view_strike_dropdown", None),
                         "sheet": sheet,
                         "cols": cols,
                         "headers": single_view_ui.get("headers") if single_view_ui else None,

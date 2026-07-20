@@ -10,3 +10,4 @@ class TickerState:
     exp_data_map: Dict[str, pd.DataFrame]
     last_updated: datetime.datetime
     is_csv: bool = False
+    strike_count_label: str = "40"

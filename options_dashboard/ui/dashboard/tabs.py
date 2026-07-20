@@ -4,6 +4,8 @@ from tksheet import Sheet
 from style.theme import *
 import customtkinter as ctk
 import pandas as pd
+from data.schwab_api import STRIKE_COUNT_OPTIONS
+from state.strike_count_prefs import initial_strike_count_label
 
 def reapply_highlighting_for_symbol(dashboard, symbol):
     """
@@ -172,6 +174,10 @@ def rebuild_tabs(self):
                     # Update price
                     if state.price > 0:
                         ui["price_var"].set(f"${state.price:.2f}")
+
+                    if ui.get("strike_var"):
+                        label = getattr(state, "strike_count_label", None) or initial_strike_count_label(symbol)
+                        ui["strike_var"].set(label)
                     
                     # Update expiration dropdown and table if data exists
                     if state.exp_data_map:
@@ -202,6 +208,7 @@ def create_stock_tab(self, symbol):
 
     price_var = tk.StringVar(value="—")
     exp_var = tk.StringVar()
+    strike_var = tk.StringVar(value=initial_strike_count_label(symbol))
 
     # ---------- Header card ----------
     card = ctk.CTkFrame(tab, corner_radius=16)
@@ -236,6 +243,24 @@ def create_stock_tab(self, symbol):
         height=36
     )
     exp_dropdown.pack(side="left", padx=8)
+
+    ctk.CTkLabel(row, text="Strikes:", font=fonts["md"], text_color=TEXT_MUTED).pack(side="left", padx=(16, 0))
+
+    def on_strike_count_selected(selected_value):
+        strike_var.set(selected_value)
+        self.on_strike_count_change(symbol, selected_value)
+
+    strike_dropdown = ctk.CTkOptionMenu(
+        row,
+        variable=strike_var,
+        values=STRIKE_COUNT_OPTIONS,
+        command=on_strike_count_selected,
+        width=80,
+        font=ctk.CTkFont(size=14),
+        dropdown_font=ctk.CTkFont(size=16),
+        height=36
+    )
+    strike_dropdown.pack(side="left", padx=8)
 
     # ---------- Table ----------
     table_wrap = ctk.CTkFrame(tab, corner_radius=14)
@@ -276,6 +301,8 @@ def create_stock_tab(self, symbol):
         "price_var": price_var,
         "exp_var": exp_var,
         "exp_dropdown": exp_dropdown,
+        "strike_var": strike_var,
+        "strike_dropdown": strike_dropdown,
         "sheet": sheet,
         "cols": cols,
         "headers": headers

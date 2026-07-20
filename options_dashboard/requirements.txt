@@ -6,3 +6,9 @@ matplotlib
 altair
 tksheet
 customtkinter
+requests
+feedparser
+beautifulsoup4
+lxml
+trafilatura
+googlenewsdecoder

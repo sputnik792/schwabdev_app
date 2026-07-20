@@ -8190,6 +8190,20 @@
     "url": "/market-activity/stocks/brid"
   },
   {
+    "symbol": "BRK-B",
+    "name": "Berkshire Hathaway Inc. Class B Common Stock",
+    "lastsale": "",
+    "netchange": "",
+    "pctchange": "",
+    "volume": "",
+    "marketCap": "0.00",
+    "country": "United States",
+    "ipoyear": "",
+    "industry": "Insurance - Specialty",
+    "sector": "Financials",
+    "url": "/market-activity/stocks/brk/b"
+  },
+  {
     "symbol": "BRKR",
     "name": "Bruker Corporation Common Stock",
     "lastsale": "$48.81",
@@ -47222,6 +47236,20 @@
     "url": "/market-activity/stocks/sowg"
   },
   {
+    "symbol": "SOXL",
+    "name": "Direxion Daily Semiconductor Bull 3X Shares",
+    "lastsale": "",
+    "netchange": "",
+    "pctchange": "",
+    "volume": "",
+    "marketCap": "0.00",
+    "country": "United States",
+    "ipoyear": "",
+    "industry": "Exchange Traded Fund",
+    "sector": "Finance",
+    "url": "/market-activity/stocks/soxl"
+  },
+  {
     "symbol": "SPAI",
     "name": "Safe Pro Group Inc. Common Stock",
     "lastsale": "$5.04",
@@ -50594,6 +50622,20 @@
     "industry": "Biotechnology: Pharmaceutical Preparations",
     "sector": "Health Care",
     "url": "/market-activity/stocks/tpst"
+  },
+  {
+    "symbol": "TQQQ",
+    "name": "ProShares UltraPro QQQ",
+    "lastsale": "",
+    "netchange": "",
+    "pctchange": "",
+    "volume": "",
+    "marketCap": "0.00",
+    "country": "United States",
+    "ipoyear": "",
+    "industry": "Exchange Traded Fund",
+    "sector": "Finance",
+    "url": "/market-activity/stocks/tqqq"
   },
   {
     "symbol": "TRAW",

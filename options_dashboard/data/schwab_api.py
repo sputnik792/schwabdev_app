@@ -1,4 +1,14 @@
 import pandas as pd
+from typing import Optional
+
+STRIKE_COUNT_OPTIONS = ["10", "20", "40", "60", "80", "All"]
+DEFAULT_STRIKE_COUNT_LABEL = "40"
+
+
+def strike_count_label_to_api(label: str) -> Optional[int]:
+    if label == "All":
+        return None
+    return int(label)
 
 def safe_call(fn, *args, **kwargs):
     try:
@@ -31,15 +41,17 @@ def fetch_stock_price(client, symbol):
         return 0.0
 
 
-def fetch_option_chain(client, symbol, strike_count=40):
+def fetch_option_chain(client, symbol, strike_count: Optional[int] = 40):
     try:
-        resp = safe_call(
-            client.option_chains,
+        kwargs = dict(
             symbol=symbol.upper(),
             contractType="ALL",
-            strikeCount=strike_count,
-            includeUnderlyingQuote=True
+            includeUnderlyingQuote=True,
         )
+        if strike_count is not None:
+            kwargs["strikeCount"] = strike_count
+
+        resp = safe_call(client.option_chains, **kwargs)
 
         data = resp.json()
 

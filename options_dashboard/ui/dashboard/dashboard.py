@@ -38,6 +38,7 @@ class Dashboard(ctk.CTkFrame):
             self.multi_view_data_backup = saved_state.get('multi_view_data_backup', {}).copy()
             # Store single_view_symbol to restore later
             self._restored_single_view_symbol = saved_state.get('single_view_symbol', None)
+            self._restored_news_by_symbol = saved_state.get('news_by_symbol', {})
             
             print(f"[DASHBOARD INIT] Restored ticker_data keys: {list(self.ticker_data.keys())}")
             print(f"[DASHBOARD INIT] Restored ticker_data count: {len(self.ticker_data)}")
@@ -54,6 +55,7 @@ class Dashboard(ctk.CTkFrame):
             self.single_view_data_backup = {}  # Backup for single-view data when multi-view overwrites it
             self.multi_view_data_backup = {}  # Backup for multi-view data when single-view overwrites it
             self._restored_single_view_symbol = None
+            self._restored_news_by_symbol = {}
         
         self.ticker_tabs = {}
         # Tracking for fetch completion
@@ -68,7 +70,7 @@ class Dashboard(ctk.CTkFrame):
         # Import heavy modules only when needed
         from ui.dashboard.layout import build_layout
         from ui.dashboard.tabs import rebuild_tabs, create_stock_tab, update_table_for_symbol, on_expiration_change
-        from ui.dashboard.data_controller import fetch_worker, fetch_all_stocks, load_csv_index_data
+        from ui.dashboard.data_controller import fetch_worker, fetch_all_stocks, load_csv_index_data, on_strike_count_change
         from ui.dashboard.refresh import start_auto_refresh, auto_refresh_price, auto_refresh_options
         from ui.dashboard.charts_controller import generate_selected_chart, generate_chart_group, _bring_chart_windows_to_front
         
@@ -77,6 +79,9 @@ class Dashboard(ctk.CTkFrame):
         self.create_stock_tab = create_stock_tab.__get__(self)
         self.update_table_for_symbol = update_table_for_symbol.__get__(self)
         self.on_expiration_change = on_expiration_change.__get__(self)
+        self.on_strike_count_change = lambda tab_key, strike_label: on_strike_count_change(
+            self, tab_key, strike_label
+        )
 
         self.fetch_worker = fetch_worker.__get__(self)
         self.fetch_all_stocks = fetch_all_stocks.__get__(self)
@@ -146,6 +151,11 @@ class Dashboard(ctk.CTkFrame):
             'single_view_data_backup': self.single_view_data_backup.copy() if hasattr(self, 'single_view_data_backup') else {},
             'multi_view_data_backup': self.multi_view_data_backup.copy() if hasattr(self, 'multi_view_data_backup') else {},
             'single_view_symbol': getattr(self, 'single_view_symbol', None),
+            'news_by_symbol': (
+                getattr(self.news_controller, 'by_symbol', {}).copy()
+                if hasattr(self, 'news_controller') and self.news_controller
+                else {}
+            ),
         }
         print(f"[REBUILD] Saved state to root._dashboard_state")
         print(f"[REBUILD] Saved ticker_data keys: {list(self.root._dashboard_state['ticker_data'].keys())}")

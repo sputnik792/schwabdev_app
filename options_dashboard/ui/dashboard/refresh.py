@@ -1,11 +1,9 @@
 import threading
 from ui import dialogs
-from data.schwab_api import fetch_stock_price, fetch_option_chain
+from data.schwab_api import fetch_stock_price
+from ui.dashboard.data_controller import get_strike_count_label, fetch_exp_map_with_prob_itm
 from state.app_state import get_state_value
 from ui.dashboard.tabs import reapply_highlighting_for_symbol
-from models.greeks import calculate_prob_itm
-from utils.time import time_to_expiration
-from config import RISK_FREE_RATE
 
 def start_auto_refresh(self):
     auto_refresh_price(self)
@@ -85,22 +83,17 @@ def auto_refresh_options(self):
 
         def worker(sym=symbol):
             try:
-                exp_map, expirations = fetch_option_chain(self.client, sym)
-                if not expirations:
-                    return
-
-                # Get current price for Prob ITM calculation
                 state = self.ticker_data.get(sym)
                 if not state:
                     return
                 price = state.price
 
-                # Calculate Prob ITM for each expiration
-                for exp_date in expirations:
-                    df = exp_map.get(exp_date)
-                    if df is not None and not df.empty:
-                        T = time_to_expiration(exp_date)
-                        exp_map[exp_date] = calculate_prob_itm(df, price, T, RISK_FREE_RATE)
+                strike_label = get_strike_count_label(self, sym)
+                exp_map, expirations = fetch_exp_map_with_prob_itm(
+                    self.client, sym, price, strike_label
+                )
+                if not expirations:
+                    return
 
                 def update():
                     state = self.ticker_data.get(sym)
@@ -118,6 +111,10 @@ def auto_refresh_options(self):
 
                     prev_exp = ui["exp_var"].get()
                     state.exp_data_map = exp_map
+                    state.strike_count_label = strike_label
+
+                    if ui.get("strike_var"):
+                        ui["strike_var"].set(strike_label)
 
                     ui["exp_dropdown"].configure(values=expirations)
                     ui["exp_var"].set(
@@ -198,29 +195,27 @@ def manual_refresh_all_tickers(dashboard):
             
             # Refresh options
             try:
-                exp_map, expirations = fetch_option_chain(dashboard.client, symbol)
+                state = dashboard.ticker_data.get(symbol)
+                if not state:
+                    continue
+                price = state.price
+                strike_label = get_strike_count_label(dashboard, symbol)
+                exp_map, expirations = fetch_exp_map_with_prob_itm(
+                    dashboard.client, symbol, price, strike_label
+                )
                 if expirations:
-                    # Get current price for Prob ITM calculation
-                    state = dashboard.ticker_data.get(symbol)
-                    if state:
-                        price = state.price
-                        
-                        # Calculate Prob ITM for each expiration
-                        for exp_date in expirations:
-                            df = exp_map.get(exp_date)
-                            if df is not None and not df.empty:
-                                T = time_to_expiration(exp_date)
-                                exp_map[exp_date] = calculate_prob_itm(df, price, T, RISK_FREE_RATE)
-                    
                     def update_options():
                         state = dashboard.ticker_data.get(symbol)
                         if state:
                             state.exp_data_map = exp_map
+                            state.strike_count_label = strike_label
                             # Update UI for multi-view
                             if symbol in dashboard.ticker_tabs:
                                 ui = dashboard.ticker_tabs[symbol]
                                 if ui and not ui.get("_is_single_view"):
                                     prev_exp = ui["exp_var"].get()
+                                    if ui.get("strike_var"):
+                                        ui["strike_var"].set(strike_label)
                                     ui["exp_dropdown"].configure(values=expirations)
                                     ui["exp_var"].set(prev_exp if prev_exp in expirations else expirations[0])
                                     dashboard.update_table_for_symbol(symbol, ui["exp_var"].get())
@@ -233,7 +228,12 @@ def manual_refresh_all_tickers(dashboard):
                                     if hasattr(dashboard, 'single_view_exp_var'):
                                         prev_exp = dashboard.single_view_exp_var.get()
                                     elif ui.get("exp_var"):
-                                        prev_exp = ui["exp_var"].get()
+                                        prev_exp = ui.get("exp_var").get()
+
+                                    if hasattr(dashboard, 'single_view_strike_var'):
+                                        dashboard.single_view_strike_var.set(strike_label)
+                                    if ui.get("strike_var"):
+                                        ui["strike_var"].set(strike_label)
                                     
                                     if hasattr(dashboard, 'single_view_exp_dropdown'):
                                         dashboard.single_view_exp_dropdown.configure(values=expirations)

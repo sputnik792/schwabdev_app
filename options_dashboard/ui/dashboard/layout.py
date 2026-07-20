@@ -8,6 +8,8 @@ from style.theme_controller import set_theme_from_switch, is_light_mode, current
 from style.tooltip import ToolTip
 from style.custom_theme_controller import list_available_themes, set_color_theme, get_current_theme
 from state.app_state import get_state_value, set_state_value
+from data.schwab_api import STRIKE_COUNT_OPTIONS
+from state.strike_count_prefs import initial_strike_count_label
 from ui import dialogs
 from ui.dashboard.tabs import highlight_rows_by_strike, create_stock_tab, format_row_data
 from ui.dashboard.data_controller import fetch_single_symbol_for_view
@@ -1023,6 +1025,11 @@ def show_multi_view(self):
             state="disabled"  # Disabled until fetch all completes
         )
         self.generate_chart_group_button.pack(side="left", padx=10)
+
+        from ui.dashboard.news_controller import build_headline_news_control
+
+        headline_wrap = build_headline_news_control(button_bar, self, width=140)
+        headline_wrap.pack(side="left", padx=10)
         
         # ---------- Content (tabs) ----------
         self.content = ctk.CTkFrame(self.multi_view, corner_radius=14)
@@ -1045,6 +1052,8 @@ def show_multi_view(self):
             def on_tab_changed(event=None):
                 if hasattr(self, 'update_info_button_state'):
                     self.update_info_button_state()
+                from ui.dashboard.news_controller import update_headline_news_button_state
+                update_headline_news_button_state(self)
             self.notebook.bind("<<NotebookTabChanged>>", on_tab_changed)
     
     # Restore the previously selected tab if it was saved
@@ -1073,6 +1082,11 @@ def show_multi_view(self):
     # Update Info button state after multi-view is shown
     if hasattr(self, 'update_info_button_state'):
         self.update_info_button_state()
+    try:
+        from ui.dashboard.news_controller import update_headline_news_button_state
+        update_headline_news_button_state(self)
+    except Exception:
+        pass
     
     # Defer data restoration to avoid blocking the UI
     # This allows the view to appear immediately
@@ -1204,6 +1218,7 @@ def show_single_view(self):
         
         price_var = tk.StringVar(value="—")
         exp_var = tk.StringVar()
+        strike_var = tk.StringVar(value=initial_strike_count_label(single_symbol))
         ticker_var = tk.StringVar(value="")  # Start empty, user must enter ticker
         
         # ---------- Header row (card on left, ticker input in middle, CSV controls on right) ----------
@@ -1267,6 +1282,26 @@ def show_single_view(self):
             height=36
         )
         exp_dropdown.pack(side="left", padx=8)
+
+        ctk.CTkLabel(row, text="Strikes:", font=fonts["md"], text_color=TEXT_MUTED).pack(side="left", padx=(16, 0))
+
+        def on_strike_count_selected(selected_value):
+            strike_var.set(selected_value)
+            current_ticker = ticker_var.get().strip().upper()
+            if current_ticker:
+                self.on_strike_count_change(f"_single_{current_ticker}", selected_value)
+
+        strike_dropdown = ctk.CTkOptionMenu(
+            row,
+            variable=strike_var,
+            values=STRIKE_COUNT_OPTIONS,
+            command=on_strike_count_selected,
+            width=80,
+            font=ctk.CTkFont(size=14),
+            dropdown_font=ctk.CTkFont(size=16),
+            height=36
+        )
+        strike_dropdown.pack(side="left", padx=8)
         
         # Generate Chart button below expiration dropdown
         chart_button_row = ctk.CTkFrame(card, fg_color="transparent")
@@ -1399,10 +1434,15 @@ def show_single_view(self):
             command=fetch_single_ticker_data,
             width=150
         )
-        fetch_button.pack(pady=(5, 16), padx=16)
+        fetch_button.pack(pady=(5, 8), padx=16)
         
         # Store button reference for positioning autocomplete before it
         self.single_view_fetch_button = fetch_button
+
+        from ui.dashboard.news_controller import build_headline_news_control
+
+        headline_wrap = build_headline_news_control(ticker_panel, self, width=150)
+        headline_wrap.pack(pady=(0, 16), padx=16)
         
         # CSV controls (right side)
         csv_panel = ctk.CTkFrame(header_row, corner_radius=16)
@@ -1490,6 +1530,8 @@ def show_single_view(self):
             "price_var": price_var,
             "exp_var": exp_var,
             "exp_dropdown": exp_dropdown,
+            "strike_var": strike_var,
+            "strike_dropdown": strike_dropdown,
             "sheet": sheet,
             "cols": cols,
             "headers": headers,
@@ -1507,6 +1549,8 @@ def show_single_view(self):
         self.single_view_price_var = price_var
         self.single_view_exp_var = exp_var
         self.single_view_exp_dropdown = exp_dropdown
+        self.single_view_strike_var = strike_var
+        self.single_view_strike_dropdown = strike_dropdown
         self.single_view_ticker_label = ticker_label
         self.single_view_options_na_label = options_na_label  # Store reference to N/A label
         
@@ -1536,6 +1580,11 @@ def show_single_view(self):
     # Update Info button state after single-view is shown
     if hasattr(self, 'update_info_button_state'):
         self.update_info_button_state()
+    try:
+        from ui.dashboard.news_controller import update_headline_news_button_state
+        update_headline_news_button_state(self)
+    except Exception:
+        pass
     
     # Single view should be independent - don't auto-populate from multi-view data
     # Only show data that was explicitly fetched in single view
@@ -1668,6 +1717,15 @@ def show_single_view(self):
                 
                 # Restore expiration dropdown and table if data exists
                 if state.exp_data_map:
+                    if getattr(state, "strike_count_label", None):
+                        label = state.strike_count_label
+                    else:
+                        label = initial_strike_count_label(symbol)
+                    if hasattr(self, "single_view_strike_var"):
+                        self.single_view_strike_var.set(label)
+                    if ui.get("strike_var"):
+                        ui["strike_var"].set(label)
+
                     if expirations:
                         # Sort expirations
                         expirations.sort()
