@@ -29,60 +29,210 @@ USER_AGENT = (
 )
 REQUEST_TIMEOUT = 12
 DEFAULT_LIMIT = 15
+# Drop headlines whose publish date is older than this many calendar days vs today.
+MAX_ARTICLE_AGE_DAYS = 5
 
 _VERBOSE_SYMBOLS_PATH = (
     Path(__file__).resolve().parents[1] / "US_stock_symbols_verbose.json"
 )
-_HISTORY_FILE = Path(__file__).resolve().parents[2] / "ticker_history.json"
-_HISTORY_MIN_COUNT = 3
 _COMPANY_NAME_CACHE: Dict[str, str] = {}
-_HISTORY_COUNT_CACHE: Optional[Dict[str, int]] = None
 
-# Brand / related-ticker overrides for tickers from ticker_history.json (count >= 3).
-# Keys use normalized symbols (BRK/B -> BRK.B). Gated by _get_ticker_aliases().
+# Brand / related-ticker / finance-keyword overrides.
+# Keys use normalized symbols (BRK/B -> BRK.B).
+# - brands: how news usually names the company
+# - tickers: related symbols (share classes, dual listings)
+# - keywords: financially relevant products, segments, catalysts often in headlines
 _BRAND_OVERRIDES: Dict[str, Dict[str, List[str]]] = {
     # ETFs & leveraged products
-    "SPY": {"brands": ["S&P 500", "S&P"]},
-    "QQQ": {"brands": ["Nasdaq 100", "Nasdaq"]},
-    "SOXL": {"brands": ["semiconductor", "chip stocks"]},
-    "TQQQ": {"tickers": ["QQQ"], "brands": ["Nasdaq", "Nasdaq 100"]},
-    "XLV": {"brands": ["healthcare sector", "health care"]},
+    "SPY": {
+        "brands": ["S&P 500", "S&P"],
+        "keywords": ["index futures", "equity futures", "Wall Street", "stock market"],
+    },
+    "QQQ": {
+        "brands": ["Nasdaq 100", "Nasdaq"],
+        "keywords": ["tech stocks", "Magnificent Seven", "growth stocks"],
+    },
+    "SOXL": {
+        "brands": ["semiconductor", "chip stocks"],
+        "keywords": ["chipmaker", "foundry", "memory chips", "AI chips", "semis"],
+    },
+    "TQQQ": {
+        "tickers": ["QQQ"],
+        "brands": ["Nasdaq", "Nasdaq 100"],
+        "keywords": ["tech stocks", "leveraged ETF", "Nasdaq rally"],
+    },
+    "XLV": {
+        "brands": ["healthcare sector", "health care"],
+        "keywords": ["pharma stocks", "biotech", "drug stocks"],
+    },
     # Dual tickers / brand != legal name
-    "GOOG": {"tickers": ["GOOGL"], "brands": ["Google", "Alphabet"]},
-    "GOOGL": {"tickers": ["GOOG"], "brands": ["Google", "Alphabet"]},
-    "META": {"brands": ["Meta", "Facebook"]},
-    "FB": {"tickers": ["META"], "brands": ["Meta", "Facebook"]},
-    "BRK.A": {"tickers": ["BRK.B"], "brands": ["Berkshire Hathaway", "Berkshire"]},
-    "BRK.B": {"tickers": ["BRK.A"], "brands": ["Berkshire Hathaway", "Berkshire"]},
+    "GOOG": {
+        "tickers": ["GOOGL"],
+        "brands": ["Google", "Alphabet"],
+        "keywords": [
+            "Google Cloud",
+            "YouTube",
+            "Gemini",
+            "ad revenue",
+            "search advertising",
+            "Waymo",
+        ],
+    },
+    "GOOGL": {
+        "tickers": ["GOOG"],
+        "brands": ["Google", "Alphabet"],
+        "keywords": [
+            "Google Cloud",
+            "YouTube",
+            "Gemini",
+            "ad revenue",
+            "search advertising",
+            "Waymo",
+        ],
+    },
+    "META": {
+        "brands": ["Meta", "Facebook"],
+        "keywords": ["Instagram", "WhatsApp", "Reels", "ad revenue", "AI spending", "Reality Labs"],
+    },
+    "FB": {
+        "tickers": ["META"],
+        "brands": ["Meta", "Facebook"],
+        "keywords": ["Instagram", "WhatsApp", "ad revenue"],
+    },
+    "BRK.A": {
+        "tickers": ["BRK.B"],
+        "brands": ["Berkshire Hathaway", "Berkshire"],
+        "keywords": ["Warren Buffett", "Buffett", "insurance float", "operating earnings"],
+    },
+    "BRK.B": {
+        "tickers": ["BRK.A"],
+        "brands": ["Berkshire Hathaway", "Berkshire"],
+        "keywords": ["Warren Buffett", "Buffett", "insurance float", "operating earnings"],
+    },
     # Frequently searched stocks (from ticker_history.json)
-    "DELL": {"brands": ["Dell"]},
-    "AXTI": {"brands": ["AXT"]},
-    "NVDA": {"brands": ["Nvidia"]},
-    "TSLA": {"brands": ["Tesla"]},
-    "MRVL": {"brands": ["Marvell"]},
-    "MU": {"brands": ["Micron"]},
-    "COHR": {"brands": ["Coherent"]},
-    "PANW": {"brands": ["Palo Alto Networks", "Palo Alto"]},
-    "PLTR": {"brands": ["Palantir"]},
-    "AVGO": {"brands": ["Broadcom"]},
-    "LITE": {"brands": ["Lumentum"]},
-    "AMD": {"brands": ["Advanced Micro Devices"]},
-    "ADBE": {"brands": ["Adobe"]},
-    "TGT": {"brands": ["Target"]},
-    "BRKR": {"brands": ["Bruker"]},
-    "PFE": {"brands": ["Pfizer"]},
-    "AAPL": {"brands": ["Apple"]},
-    "ORCL": {"brands": ["Oracle"]},
-    "MSFT": {"brands": ["Microsoft"]},
-    "AMZN": {"brands": ["Amazon"]},
-    "EA": {"brands": ["Electronic Arts"]},
-    "ASTS": {"brands": ["AST SpaceMobile"]},
-    "AAOI": {"brands": ["Applied Optoelectronics"]},
-    "COST": {"brands": ["Costco"]},
-    "VST": {"brands": ["Vistra"]},
-    "DAL": {"brands": ["Delta Air Lines", "Delta"]},
-    "PDYN": {"brands": ["Palladyne AI"]},
+    "DELL": {
+        "brands": ["Dell"],
+        "keywords": ["AI servers", "server demand", "PC sales", "data center", "PowerEdge"],
+    },
+    "AXTI": {
+        "brands": ["AXT"],
+        "keywords": ["compound semiconductor", "wafer", "gallium arsenide", "InP", "substrate"],
+    },
+    "NVDA": {
+        "brands": ["Nvidia"],
+        "keywords": ["GPU", "AI chips", "data center", "CUDA", "Blackwell", "H100", "chip demand"],
+    },
+    "TSLA": {
+        "brands": ["Tesla"],
+        "keywords": ["EV deliveries", "autopilot", "FSD", "Cybertruck", "energy storage", "Gigafactory"],
+    },
+    "MRVL": {
+        "brands": ["Marvell"],
+        "keywords": ["custom silicon", "AI accelerators", "networking chips", "optical DSP", "data center"],
+    },
+    "MU": {
+        "brands": ["Micron"],
+        "keywords": ["DRAM", "HBM", "NAND", "memory chips", "AI memory", "chip cycle"],
+    },
+    "COHR": {
+        "brands": ["Coherent"],
+        "keywords": ["optical communications", "lasers", "transceivers", "datacom", "AI networking"],
+    },
+    "PANW": {
+        "brands": ["Palo Alto Networks", "Palo Alto"],
+        "keywords": ["cybersecurity", "firewall", "Prisma", "security software", "cloud security"],
+    },
+    "PLTR": {
+        "brands": ["Palantir"],
+        "keywords": ["AIP", "government contracts", "commercial bookings", "data analytics", "AI platform"],
+    },
+    "AVGO": {
+        "brands": ["Broadcom"],
+        "keywords": ["custom AI chips", "VMware", "networking ASICs", "semiconductor", "data center"],
+    },
+    "LITE": {
+        "brands": ["Lumentum"],
+        "keywords": ["optical components", "transceivers", "datacom", "lasers", "AI networking"],
+    },
+    "AMD": {
+        "brands": ["Advanced Micro Devices"],
+        "keywords": ["EPYC", "Ryzen", "MI300", "AI GPUs", "data center CPUs", "chip rivalry"],
+    },
+    "ADBE": {
+        "brands": ["Adobe"],
+        "keywords": ["Creative Cloud", "Firefly", "subscription revenue", "digital media", "PDF"],
+    },
+    "TGT": {
+        "brands": ["Target"],
+        "keywords": ["same-store sales", "retail sales", "consumer spending", "inventory", "discount retail"],
+    },
+    "BRKR": {
+        "brands": ["Bruker"],
+        "keywords": ["scientific instruments", "life science", "analytical instruments", "biopharma tools"],
+    },
+    "PFE": {
+        "brands": ["Pfizer"],
+        "keywords": ["drug pipeline", "vaccine", "pharma earnings", "FDA approval", "prescription drugs"],
+    },
+    "AAPL": {
+        "brands": ["Apple"],
+        "keywords": ["iPhone", "App Store", "Services revenue", "Mac", "AI features", "China sales"],
+    },
+    "ORCL": {
+        "brands": ["Oracle"],
+        "keywords": ["cloud infrastructure", "database", "AI cloud", "OCI", "enterprise software"],
+    },
+    "MSFT": {
+        "brands": ["Microsoft"],
+        "keywords": ["Azure", "OpenAI", "Copilot", "cloud revenue", "Windows", "Office 365"],
+    },
+    "AMZN": {
+        "brands": ["Amazon"],
+        "keywords": ["AWS", "e-commerce", "advertising", "Prime", "cloud computing", "retail sales"],
+    },
+    "EA": {
+        "brands": ["Electronic Arts"],
+        "keywords": ["video games", "live services", "sports titles", "game bookings", "mobile gaming"],
+    },
+    "ASTS": {
+        "brands": ["AST SpaceMobile"],
+        "keywords": ["satellite broadband", "space-based cellular", "mobile connectivity", "spectrum"],
+    },
+    "AAOI": {
+        "brands": ["Applied Optoelectronics"],
+        "keywords": ["optical transceivers", "datacom", "fiber optics", "AI networking"],
+    },
+    "COST": {
+        "brands": ["Costco"],
+        "keywords": ["membership fees", "warehouse clubs", "comparable sales", "retail traffic"],
+    },
+    "VST": {
+        "brands": ["Vistra"],
+        "keywords": ["power generation", "electricity demand", "AI data centers", "energy prices", "utilities"],
+    },
+    "DAL": {
+        "brands": ["Delta Air Lines", "Delta"],
+        "keywords": ["airline capacity", "passenger demand", "unit revenue", "jet fuel", "travel demand"],
+    },
+    "PDYN": {
+        "brands": ["Palladyne AI"],
+        "keywords": ["robotics software", "autonomous systems", "defense robotics"],
+    },
+    "RBLX": {
+        "brands": ["Roblox"],
+        "keywords": ["user engagement", "bookings", "metaverse", "creator economy", "gaming platform"],
+    },
 }
+
+# Generic finance context — only used when paired with ticker/brand (never alone).
+_FINANCE_CONTEXT_TERMS = [
+    "earnings",
+    "stock",
+    "shares",
+    "analyst",
+    "guidance",
+    "revenue",
+]
 
 _CORP_SUFFIX_RE = re.compile(
     r"\b(Inc\.?|Corp\.?|Corporation|Ltd\.?|Limited|LLC|L\.P\.|LP|PLC|Co\.?|Company|The)\b",
@@ -96,6 +246,54 @@ _FUND_NAME_RE = re.compile(
     r"\b(ETF|ETN|Fund|Trust|Shares|Direxion|ProShares|SPDR|iShares|Invesco|Vanguard|Ultrapro|Bull 3X)\b",
     re.I,
 )
+
+
+def _as_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def is_within_article_age(
+    published: Optional[datetime],
+    *,
+    now: Optional[datetime] = None,
+    max_age_days: int = MAX_ARTICLE_AGE_DAYS,
+    undated_fallback: Optional[datetime] = None,
+) -> bool:
+    """
+    True if publish date is within max_age_days of today's date.
+
+    Undated articles use undated_fallback when provided; otherwise they are kept.
+    """
+    now = _as_utc(now or datetime.now(timezone.utc))
+    today = now.date()
+    stamp = published or undated_fallback
+    if stamp is None:
+        return True
+    stamp = _as_utc(stamp)
+    return (today - stamp.date()).days <= max_age_days
+
+
+def filter_fresh_news_articles(
+    articles: Iterable[NewsArticle],
+    *,
+    now: Optional[datetime] = None,
+    max_age_days: int = MAX_ARTICLE_AGE_DAYS,
+    undated_fallback: Optional[datetime] = None,
+) -> List[NewsArticle]:
+    """Keep only NewsArticle rows within the age window."""
+    now = now or datetime.now(timezone.utc)
+    return [
+        a
+        for a in articles
+        if is_within_article_age(
+            a.published,
+            now=now,
+            max_age_days=max_age_days,
+            undated_fallback=undated_fallback,
+        )
+    ]
 
 
 @dataclass
@@ -230,36 +428,13 @@ def _normalize_ticker_symbol(symbol: str) -> str:
     return symbol.replace("/", ".")
 
 
-def _load_history_counts() -> Dict[str, int]:
-    """Load search counts from ticker_history.json, keyed by normalized symbol."""
-    global _HISTORY_COUNT_CACHE
-    if _HISTORY_COUNT_CACHE is not None:
-        return _HISTORY_COUNT_CACHE
-
-    counts: Dict[str, int] = {}
-    try:
-        if _HISTORY_FILE.is_file():
-            with open(_HISTORY_FILE, encoding="utf-8") as f:
-                for raw_symbol, entry in json.load(f).items():
-                    canon = _normalize_ticker_symbol(raw_symbol)
-                    counts[canon] = counts.get(canon, 0) + int(entry.get("count", 0))
-    except Exception:
-        pass
-
-    _HISTORY_COUNT_CACHE = counts
-    return counts
-
-
-def _is_frequent_ticker(symbol: str) -> bool:
-    return _load_history_counts().get(_normalize_ticker_symbol(symbol), 0) >= _HISTORY_MIN_COUNT
-
-
 def _get_ticker_aliases(symbol: str) -> Dict[str, List[str]]:
-    """Return brand/ticker overrides for symbols the user searches often."""
+    """Return brand/ticker/keyword overrides when the symbol is in the lookup table."""
     canon = _normalize_ticker_symbol(symbol)
-    if not _is_frequent_ticker(canon):
+    entry = _BRAND_OVERRIDES.get(canon)
+    if not entry:
         return {}
-    return {key: list(values) for key, values in _BRAND_OVERRIDES.get(canon, {}).items()}
+    return {key: list(values) for key, values in entry.items()}
 
 
 def lookup_company_name(symbol: str) -> str:
@@ -310,14 +485,15 @@ def _is_fund_name(name: str) -> bool:
 
 def build_news_search_terms(symbol: str, company_name: str = "") -> Dict[str, Set[str]]:
     """
-    Build ticker + name keywords for news search and relevance scoring.
+    Build ticker + name + finance keywords for news search and relevance scoring.
 
-    Includes related tickers (GOOG/GOOGL) and brand names (Google for Alphabet).
-    Brand overrides apply to tickers you search frequently (ticker_history.json).
+    Includes related tickers (GOOG/GOOGL), brand names, and financially relevant
+    product/segment keywords from the lookup table.
     """
     symbol = _normalize_ticker_symbol(symbol)
     tickers: Set[str] = {symbol} if symbol else set()
     names: Set[str] = set()
+    keywords: Set[str] = set()
 
     aliases = _get_ticker_aliases(symbol)
     for related in aliases.get("tickers", []):
@@ -332,48 +508,99 @@ def build_news_search_terms(symbol: str, company_name: str = "") -> Dict[str, Se
         if brand.upper() != symbol:
             names.add(brand)
 
-    return {"tickers": tickers, "names": names}
+    for kw in aliases.get("keywords", []):
+        keywords.add(kw)
+
+    return {"tickers": tickers, "names": names, "keywords": keywords}
 
 
 def _format_query_term(term: str) -> str:
     term = term.strip()
     if not term:
         return ""
-    if " " in term:
+    if " " in term or "&" in term:
         return f'"{term}"'
     return term
 
 
+def _or_group(terms: Iterable[str]) -> str:
+    parts = [_format_query_term(t) for t in terms if t and str(t).strip()]
+    parts = [p for p in parts if p]
+    if not parts:
+        return ""
+    if len(parts) == 1:
+        return parts[0]
+    return "(" + " OR ".join(parts) + ")"
+
+
 def build_google_news_queries(symbol: str, company_name: str = "") -> List[str]:
-    """Build one or more Google News RSS queries for a ticker."""
+    """Build Google News RSS queries using ticker, brand, and finance keywords."""
     symbol = _normalize_ticker_symbol(symbol)
     terms = build_news_search_terms(symbol, company_name=company_name)
     tickers = sorted(terms["tickers"])
     names = sorted(terms["names"])
+    keywords = sorted(terms["keywords"])
 
-    ticker_part = " OR ".join(tickers)
+    entity_terms = list(tickers) + list(names)
+    entity_group = _or_group(entity_terms)
+    queries: List[str] = []
+
+    # 1) Tight: ticker must co-occur with brand/company name
     if names:
-        name_part = " OR ".join(_format_query_term(name) for name in names)
-        primary = f"({ticker_part}) AND ({name_part})"
-        broad = f"{ticker_part} OR {name_part} stock when:7d"
-        return [primary, broad]
+        queries.append(f"{_or_group(tickers)} AND {_or_group(names)}")
 
-    return [f"{symbol} stock when:7d"]
+    # 2) Finance-focused: entity + company-specific finance keywords
+    if entity_group and keywords:
+        # Cap keywords in the query so Google News stays focused
+        kw_group = _or_group(keywords[:6])
+        queries.append(f"{entity_group} AND {kw_group} when:7d")
+
+    # 3) Generic finance context paired with the entity (never keywords alone)
+    if entity_group:
+        finance_group = _or_group(_FINANCE_CONTEXT_TERMS)
+        queries.append(f"{entity_group} AND {finance_group} when:7d")
+
+    # 4) Broad fallback
+    if names:
+        queries.append(f"{_or_group(tickers + names)} stock when:7d")
+    else:
+        queries.append(f"{symbol} stock when:7d")
+
+    # Preserve order, drop empties/dupes
+    seen = set()
+    out: List[str] = []
+    for q in queries:
+        q = " ".join(q.split())
+        if q and q not in seen:
+            seen.add(q)
+            out.append(q)
+    return out
 
 
 def _article_relevance(article: NewsArticle, terms: Dict[str, Set[str]]) -> int:
-    """Score how closely a headline matches the ticker/company keywords."""
+    """Score how closely a headline matches ticker/company/finance keywords."""
     text = f"{article.title} {article.summary}".lower()
     score = 0
 
-    for ticker in terms["tickers"]:
+    for ticker in terms.get("tickers", ()):
         ticker_l = ticker.lower()
         if ticker_l in text or f"({ticker_l})" in text:
             score += 3
 
-    for name in terms["names"]:
+    for name in terms.get("names", ()):
         if name.lower() in text:
             score += 2
+
+    for kw in terms.get("keywords", ()):
+        if kw.lower() in text:
+            score += 2
+
+    # Light boost when a finance-context word appears with an entity match
+    if score > 0:
+        for ctx in _FINANCE_CONTEXT_TERMS:
+            if ctx.lower() in text:
+                score += 1
+                break
 
     return score
 
@@ -539,13 +766,16 @@ def fetch_stock_news(
         merged = [article for article, _ in scored]
 
     provider_rank = {"google_news": 0, "yahoo_rss": 1, "yahoo_html": 2}
+    # Newest first; relevance / provider only break ties on the same timestamp.
     merged.sort(
         key=lambda a: (
+            -(a.published or fallback_ts).timestamp(),
             -_article_relevance(a, search_terms),
             provider_rank.get(a.provider, 9),
-            -(a.published or fallback_ts).timestamp(),
         )
     )
+    # Drop headlines older than MAX_ARTICLE_AGE_DAYS vs today
+    merged = filter_fresh_news_articles(merged, undated_fallback=fallback_ts)
     result.articles = merged[:limit]
     if not result.articles and not result.errors:
         result.errors.append("No articles found.")

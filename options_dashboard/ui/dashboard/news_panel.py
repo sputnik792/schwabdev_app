@@ -14,7 +14,11 @@ import customtkinter as ctk
 
 from data.news_scraper import NewsArticle, NewsFetchResult, fetch_stock_news, format_local_datetime
 from style.theme import ACCENT_PRIMARY, TEXT_MUTED, TEXT_SECONDARY, get_fonts
-from ui.dashboard.news_summary_window import open_article_summary_window
+from ui.dashboard.news_summary_window import (
+    NEWS_CONTENT_WIDTH,
+    create_xy_scrollable_frame,
+    open_article_summary_window,
+)
 
 
 class NewsPanel(ctk.CTkFrame):
@@ -63,8 +67,9 @@ class NewsPanel(ctk.CTkFrame):
         )
         self.status_label.pack(fill="x", padx=16, pady=(0, 8))
 
-        self.list_frame = ctk.CTkScrollableFrame(self, corner_radius=12)
-        self.list_frame.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+        list_host = ctk.CTkFrame(self, fg_color="transparent")
+        list_host.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+        self.list_frame = create_xy_scrollable_frame(list_host, corner_radius=12)
 
         empty = ctk.CTkLabel(
             self.list_frame,
@@ -187,7 +192,7 @@ class NewsPanel(ctk.CTkFrame):
                 text_color=TEXT_MUTED,
                 anchor="w",
                 justify="left",
-                wraplength=520,
+                wraplength=NEWS_CONTENT_WIDTH - 40,
             ).pack(fill="x", padx=12, pady=(0, 10))
         else:
             ctk.CTkFrame(card, fg_color="transparent", height=6).pack()

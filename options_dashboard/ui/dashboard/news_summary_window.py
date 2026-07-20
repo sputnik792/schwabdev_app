@@ -22,6 +22,37 @@ from data.ollama_summarizer import (
 )
 from style.theme import ACCENT_PRIMARY, TEXT_MUTED, TEXT_SECONDARY, get_fonts
 
+# Min content width for news windows — narrower views get a horizontal scrollbar.
+NEWS_CONTENT_WIDTH = 760
+
+
+def create_xy_scrollable_frame(
+    master,
+    *,
+    content_width: int = NEWS_CONTENT_WIDTH,
+    corner_radius: int = 12,
+) -> ctk.CTkScrollableFrame:
+    """
+    Nested scroll area: vertical list + horizontal overflow.
+
+    Returns the inner vertical CTkScrollableFrame — pack content into it.
+    """
+    horizontal = ctk.CTkScrollableFrame(
+        master,
+        orientation="horizontal",
+        corner_radius=corner_radius,
+    )
+    horizontal.pack(fill="both", expand=True)
+
+    vertical = ctk.CTkScrollableFrame(
+        horizontal,
+        orientation="vertical",
+        width=content_width,
+        corner_radius=corner_radius,
+    )
+    vertical.pack(side="left", fill="y", expand=True)
+    return vertical
+
 
 def build_sentiment_indicator(
     parent,
@@ -160,8 +191,8 @@ def open_article_summary_window(
     win = ctk.CTkToplevel(parent)
     title_preview = (article.title or "Article")[:80]
     win.title(f"Summary — {title_preview}")
-    win.geometry("640x780")
-    win.minsize(480, 480)
+    win.geometry("880x780")
+    win.minsize(700, 520)
     win.transient(parent)
     win.lift()
     win.focus()
@@ -201,8 +232,9 @@ def open_article_summary_window(
     )
     status_label.pack(fill="x", padx=16, pady=(0, 12))
 
-    body = ctk.CTkScrollableFrame(shell, corner_radius=12)
-    body.pack(fill="both", expand=True)
+    body_host = ctk.CTkFrame(shell, fg_color="transparent")
+    body_host.pack(fill="both", expand=True)
+    body = create_xy_scrollable_frame(body_host, corner_radius=12)
 
     sentiment_frame, apply_sentiment = build_sentiment_indicator(body, fonts=fonts)
     sentiment_frame.pack(fill="x", padx=8, pady=(8, 4))
@@ -359,8 +391,8 @@ def open_enriched_article_window(parent, enriched) -> ctk.CTkToplevel:
 
     win = ctk.CTkToplevel(parent)
     win.title(f"Summary — {title[:80]}")
-    win.geometry("640x720")
-    win.minsize(480, 420)
+    win.geometry("880x720")
+    win.minsize(700, 480)
     win.transient(parent)
     win.lift()
     win.focus()
@@ -399,8 +431,9 @@ def open_enriched_article_window(parent, enriched) -> ctk.CTkToplevel:
         anchor="w",
     ).pack(fill="x", padx=16, pady=(0, 12))
 
-    body = ctk.CTkScrollableFrame(shell, corner_radius=12)
-    body.pack(fill="both", expand=True)
+    body_host = ctk.CTkFrame(shell, fg_color="transparent")
+    body_host.pack(fill="both", expand=True)
+    body = create_xy_scrollable_frame(body_host, corner_radius=12)
 
     sentiment_frame, apply_sentiment = build_sentiment_indicator(body, fonts=fonts)
     sentiment_frame.pack(fill="x", padx=8, pady=(8, 4))

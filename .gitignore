@@ -16,3 +16,6 @@ test.py
 
 # Heston model settings (user-specific, should not be tracked)
 options_dashboard/models/data_analysis/settings/heston_params.json
+
+# Per-ticker cached headline news (generated at runtime)
+options_dashboard/state/news_cache/

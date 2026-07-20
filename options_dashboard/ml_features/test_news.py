@@ -36,8 +36,8 @@ def main():
 
     root = ctk.CTk()
     root.title("Stock News — Test")
-    root.geometry("700x780")
-    root.minsize(560, 520)
+    root.geometry("920x780")
+    root.minsize(760, 520)
 
     fonts = get_fonts()
 

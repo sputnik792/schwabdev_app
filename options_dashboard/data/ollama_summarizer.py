@@ -70,6 +70,60 @@ _REASON_LINE_RE = re.compile(
     r"(?im)^\s*(?:reason|rationale|why)\s*[:\-]\s*(.+)$"
 )
 
+# Shared trading lexicon for local LLM sentiment prompts (keep compact for small models).
+_SENTIMENT_GUIDANCE = """
+Classify how a stock trader would typically read the article for the company/ticker.
+
+Scale (pick exactly one label):
+- very_bearish: severe downside — bankruptcy risk, fraud, major guidance cut, failed deal, huge miss, delisting, crash language
+- bearish: clear negative catalyst — miss, downgrade, weak outlook, lawsuit loss, demand soft, margin pressure, cut price target
+- neutral: factual/mixed/no clear directional bias, or positives and negatives roughly cancel
+- bullish: clear positive catalyst — beat, upgrade, strong demand, raised outlook, buyback, raised price target
+- very_bullish: strong upside — blowout beat + raise, blockbuster win, major contract, breakout/surge language with strong fundamentals
+
+Bullish finance cues (examples): beat estimates, raised guidance, upside surprise, upgrade, overweight/outperform/buy rating,
+raised price target, record revenue/profit, margin expansion, accelerating growth, strong bookings/backlog, new contract award,
+FDA approval, buyback/authorization, dividend hike, short squeeze, breakout, all-time high, multiple expansion, AI demand surge.
+
+Bearish finance cues (examples): miss estimates, cut guidance, downside surprise, downgrade, underweight/underperform/sell rating,
+cut price target, profit warning, margin compression, slowing growth, demand weakness, inventory build, delayed product,
+FDA rejection, lawsuit/settlement risk, dilution/secondary offering, debt concerns, layoffs as distress signal, crash/plunge/selloff,
+investigation, accounting issues, bankruptcy/going concern.
+
+Rules:
+- Weight hard numbers and forward guidance more than adjectives.
+- "Beat on earnings but cut guidance" or "rally on weak print" → lean on the forward signal (often bearish or neutral).
+- Analyst rating changes and price-target moves are directional cues.
+- Do not invent facts. If unclear or purely descriptive, use neutral.
+""".strip()
+
+
+def _sentiment_system_prompt(*, with_summary: bool = False) -> str:
+    labels = ", ".join(SENTIMENT_LABELS)
+    output_rules = (
+        "Reply with EXACTLY two lines in this format:\n"
+        "SENTIMENT: <label>\n"
+        "REASON: <one short sentence citing the key cue>\n"
+        f"Where <label> is one of: {labels}"
+    )
+    if with_summary:
+        return (
+            "You are a concise financial news editor for equity traders.\n"
+            "First summarize the article in 3-5 short plain-English sentences covering: "
+            "what happened, why it matters, and any numbers (price moves, %, revenue, guidance) if present. "
+            "Do not invent facts. Do not use bullet points. Do not mention that you are an AI.\n\n"
+            f"{_SENTIMENT_GUIDANCE}\n\n"
+            "After the summary, add exactly these two lines:\n"
+            "SENTIMENT: <label>\n"
+            "REASON: <one short sentence citing the key cue>\n"
+            f"Where <label> is one of: {labels}"
+        )
+    return (
+        "You are a market sentiment classifier for equity and options traders.\n\n"
+        f"{_SENTIMENT_GUIDANCE}\n\n"
+        f"{output_rules}"
+    )
+
 
 @dataclass
 class OllamaStatus:
@@ -326,19 +380,10 @@ def analyze_sentiment_with_ollama(
     if not clipped:
         return SentimentResult(error="No article text for sentiment analysis.", model=model)
 
-    labels = ", ".join(SENTIMENT_LABELS)
-    system = (
-        "You are a market sentiment classifier for equity traders. "
-        "Judge how the article's content would typically be read for the company or stock: "
-        "positive catalysts → bullish, negative news → bearish, mixed/unclear → neutral. "
-        "Do not invent facts. Reply with EXACTLY two lines in this format:\n"
-        "SENTIMENT: <label>\n"
-        "REASON: <one short sentence>\n"
-        f"Where <label> is one of: {labels}"
-    )
+    system = _sentiment_system_prompt(with_summary=False)
     user = (
         f"Title: {title or '(untitled)'}\n\nArticle:\n{clipped}\n\n"
-        "Classify sentiment now:"
+        "Classify SENTIMENT and REASON using the trading cues above:"
     )
 
     content, elapsed, err = _chat_ollama(
@@ -347,7 +392,7 @@ def analyze_sentiment_with_ollama(
         model=model,
         host=host,
         temperature=temperature,
-        num_predict=80,
+        num_predict=100,
     )
     if err:
         return SentimentResult(model=model, elapsed_sec=elapsed, error=err)
@@ -373,24 +418,13 @@ def summarize_with_ollama(
     if not clipped:
         return LlmSummaryResult(model=model, summary="", error="No article text to summarize.")
 
-    labels = ", ".join(SENTIMENT_LABELS)
     if include_sentiment:
-        system = (
-            "You are a concise financial news editor. "
-            "Summarize the article in plain English for a stock trader. "
-            "Use 3-5 short sentences. Cover: what happened, why it matters, and any numbers "
-            "(price moves, %, revenue, guidance) if present. "
-            "Do not invent facts. Do not use bullet points. Do not mention that you are an AI.\n\n"
-            "After the summary, add exactly these two lines:\n"
-            "SENTIMENT: <label>\n"
-            "REASON: <one short sentence>\n"
-            f"Where <label> is one of: {labels}"
-        )
+        system = _sentiment_system_prompt(with_summary=True)
         user = (
             f"Title: {title or '(untitled)'}\n\nArticle:\n{clipped}\n\n"
-            "Write the summary, then SENTIMENT and REASON:"
+            "Write the summary, then SENTIMENT and REASON using the trading cues:"
         )
-        num_predict = 340
+        num_predict = 380
     else:
         system = (
             "You are a concise financial news editor. "

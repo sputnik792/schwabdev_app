@@ -66,70 +66,135 @@ def format_row_data(row, cols):
         row_data.append(val)
     return row_data
 
+# Bright accents for max open-interest cells (stand out over ITM/OTM row colors)
+_MAX_CALL_OI_BG = "#00e5ff"  # cyan
+_MAX_PUT_OI_BG = "#ff9100"   # amber/orange
+_MAX_OI_FG = "#000000"
+
+
+def _oi_value(row, col_name: str) -> float:
+    """Parse an OI cell to float; empty/invalid → 0."""
+    try:
+        val = row.get(col_name, 0)
+        if val is None or val == "" or (isinstance(val, float) and pd.isna(val)):
+            return 0.0
+        return float(val)
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def highlight_max_oi_cells(sheet, df, cols):
+    """
+    Highlight the OI_Call / OI_Put cells with the highest open interest.
+    Call max → bright cyan; Put max → bright amber. Ties highlight every match.
+    """
+    if not sheet or df is None or df.empty:
+        return
+
+    try:
+        call_col_idx = cols.index("OI_Call")
+    except ValueError:
+        call_col_idx = None
+    try:
+        put_col_idx = cols.index("OI_Put")
+    except ValueError:
+        put_col_idx = None
+
+    if call_col_idx is None and put_col_idx is None:
+        return
+
+    call_ois = [_oi_value(row, "OI_Call") for _, row in df.iterrows()]
+    put_ois = [_oi_value(row, "OI_Put") for _, row in df.iterrows()]
+
+    if call_col_idx is not None and call_ois:
+        max_call = max(call_ois)
+        if max_call > 0:
+            for row_idx, oi in enumerate(call_ois):
+                if oi == max_call:
+                    try:
+                        sheet.highlight_cells(
+                            row=row_idx,
+                            column=call_col_idx,
+                            bg=_MAX_CALL_OI_BG,
+                            fg=_MAX_OI_FG,
+                        )
+                    except TypeError:
+                        sheet.highlight_cells(
+                            row=row_idx, column=call_col_idx, bg=_MAX_CALL_OI_BG
+                        )
+
+    if put_col_idx is not None and put_ois:
+        max_put = max(put_ois)
+        if max_put > 0:
+            for row_idx, oi in enumerate(put_ois):
+                if oi == max_put:
+                    try:
+                        sheet.highlight_cells(
+                            row=row_idx,
+                            column=put_col_idx,
+                            bg=_MAX_PUT_OI_BG,
+                            fg=_MAX_OI_FG,
+                        )
+                    except TypeError:
+                        sheet.highlight_cells(
+                            row=row_idx, column=put_col_idx, bg=_MAX_PUT_OI_BG
+                        )
+
+
 def highlight_rows_by_strike(sheet, df, cols, stock_price):
     """
     Highlight rows in the sheet based on strike price vs stock price
     - Strike <= stock_price: light red (#ffcccc) on columns with "put" in name
     - Strike > stock_price: light green (#ccffcc) on columns with "call" in name
+    Then highlight max OI_Call / OI_Put cells with bright accents.
     """
-    if not sheet or df is None or df.empty or stock_price <= 0:
+    if not sheet or df is None or df.empty:
         return
-    
+
     # Find the Strike column index
     try:
         strike_col_idx = cols.index("Strike")
     except ValueError:
-        # Strike column not found, skip highlighting
-        return
-    
-    # Get number of columns and rows
-    num_cols = len(cols)
+        strike_col_idx = None
+
     num_rows = len(df)
-    
+
     # First, clear all highlights by setting bg to None/default for all option columns
     # This ensures old highlights are removed before applying new ones
-    # We need to clear both call and put columns
     try:
         for row_idx in range(num_rows):
             for col_idx, col_name in enumerate(cols):
-                # Only clear highlights on call/put columns (not Strike column)
                 if "call" in col_name.lower() or "put" in col_name.lower():
                     try:
-                        # Try to clear highlight by setting bg to None or empty
-                        # If tksheet doesn't support this, new highlights will overwrite
                         sheet.highlight_cells(row=row_idx, column=col_idx, bg="")
-                    except:
-                        # If clearing doesn't work, we'll just overwrite with new highlights
+                    except Exception:
                         pass
-    except:
-        # If clearing doesn't work, proceed - new highlights should overwrite old ones
+    except Exception:
         pass
-    
-    # Iterate through rows and highlight based on strike price
-    for row_idx, (_, row) in enumerate(df.iterrows()):
-        try:
-            strike = float(row.get("Strike", 0) or 0)
-            if strike <= 0:
+
+    # ITM/OTM row coloring (requires a valid spot price)
+    if strike_col_idx is not None and stock_price and stock_price > 0:
+        for row_idx, (_, row) in enumerate(df.iterrows()):
+            try:
+                strike = float(row.get("Strike", 0) or 0)
+                if strike <= 0:
+                    continue
+
+                if strike <= stock_price:
+                    bg_color = "#ffcccc"
+                    for col_idx, col_name in enumerate(cols):
+                        if "put" in col_name.lower():
+                            sheet.highlight_cells(row=row_idx, column=col_idx, bg=bg_color)
+                else:
+                    bg_color = "#ccffcc"
+                    for col_idx, col_name in enumerate(cols):
+                        if "call" in col_name.lower():
+                            sheet.highlight_cells(row=row_idx, column=col_idx, bg=bg_color)
+            except (ValueError, TypeError):
                 continue
-            
-            # Determine which columns to highlight based on strike vs stock price
-            if strike <= stock_price:
-                # Light red for strike <= stock price - only highlight "put" columns
-                bg_color = "#ffcccc"
-                # Highlight only columns with "put" in the name (case-insensitive)
-                for col_idx, col_name in enumerate(cols):
-                    if "put" in col_name.lower():
-                        sheet.highlight_cells(row=row_idx, column=col_idx, bg=bg_color)
-            else:
-                # Light green for strike > stock price - only highlight "call" columns
-                bg_color = "#ccffcc"
-                # Highlight only columns with "call" in the name (case-insensitive)
-                for col_idx, col_name in enumerate(cols):
-                    if "call" in col_name.lower():
-                        sheet.highlight_cells(row=row_idx, column=col_idx, bg=bg_color)
-        except (ValueError, TypeError):
-            # Skip rows with invalid strike prices
-            continue
+
+    # Overlay brightest accents on the peak call / put open-interest cells
+    highlight_max_oi_cells(sheet, df, cols)
 
 def rebuild_tabs(self):
     for tab in self.notebook.tabs():

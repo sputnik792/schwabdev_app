@@ -9,6 +9,7 @@ from typing import Optional
 import customtkinter as ctk
 
 from data.news_enrichment import NewsEnrichmentController, NewsEnrichmentResult
+from data.news_cache import load_news_cache
 from data.news_scraper import lookup_company_name
 from style.theme import ACCENT_SUCCESS, TEXT_MUTED
 from ui import dialogs
@@ -53,7 +54,7 @@ def resolve_dashboard_ticker(dashboard) -> Optional[str]:
 
 
 def start_headline_news_enrichment(dashboard, symbol: str) -> None:
-    """Kick off background news+LLM enrichment for a symbol."""
+    """Kick off background news+LLM enrichment for a symbol (loads cache first)."""
     symbol = (symbol or "").strip().upper()
     if not symbol:
         return
@@ -64,7 +65,7 @@ def start_headline_news_enrichment(dashboard, symbol: str) -> None:
 
 
 def update_headline_news_button_state(dashboard, symbol: Optional[str] = None) -> None:
-    """Enable Headline News only when enrichment for the current ticker is ready."""
+    """Enable Headline News when cache/memory has articles (even while refreshing)."""
     buttons = getattr(dashboard, "headline_news_buttons", None) or []
     dots = getattr(dashboard, "headline_news_dots", None) or []
     if not buttons and not dots:
@@ -74,8 +75,20 @@ def update_headline_news_button_state(dashboard, symbol: Optional[str] = None) -
     ctrl = getattr(dashboard, "news_controller", None)
     entry: Optional[NewsEnrichmentResult] = ctrl.get(current) if ctrl and current else None
 
-    ready = bool(entry and entry.ready)
-    loading = bool(entry and entry.status == "loading")
+    # Disk cache can enable the button before the in-memory controller is warm
+    if (not entry or not entry.articles) and current:
+        cached = load_news_cache(current)
+        if cached and cached.articles:
+            entry = cached
+
+    ready = bool(entry and entry.articles)
+    loading = bool(
+        entry
+        and getattr(entry, "status", "") in ("loading", "refreshing")
+    )
+    # Also treat controller loading without articles as loading
+    if ctrl and current and ctrl.is_loading(current):
+        loading = True
 
     for btn in buttons:
         try:
@@ -92,10 +105,12 @@ def update_headline_news_button_state(dashboard, symbol: Optional[str] = None) -
         try:
             if not dot.winfo_exists():
                 continue
-            if ready:
+            if ready and not loading:
                 dot.configure(text="●", text_color=ACCENT_SUCCESS)
             elif loading:
                 dot.configure(text="●", text_color="#f59e0b")
+            elif ready:
+                dot.configure(text="●", text_color=ACCENT_SUCCESS)
             else:
                 dot.configure(text="○", text_color=TEXT_MUTED)
         except Exception:
@@ -110,15 +125,37 @@ def open_headline_news_for_dashboard(dashboard) -> None:
 
     ctrl = ensure_news_controller(dashboard)
     entry = ctrl.get(symbol)
-    if not entry or not entry.ready:
-        dialogs.warning(
-            "News Still Loading",
-            "Headline news is still being prepared.\n"
-            "It runs automatically when you fetch options data.",
+
+    # Prefer live controller state; fall back to disk cache
+    if not entry or not entry.articles:
+        cached = load_news_cache(symbol)
+        if cached and cached.articles:
+            entry = cached
+            ctrl.seed(cached)
+
+    if not entry or not entry.articles:
+        # Kick a fetch and open an empty live window that fills in as results arrive
+        start_headline_news_enrichment(dashboard, symbol)
+        entry = ctrl.get(symbol) or NewsEnrichmentResult(symbol=symbol, status="loading")
+        open_headline_news_window(
+            dashboard.root,
+            symbol=symbol,
+            result=entry,
+            controller=ctrl,
         )
         return
 
-    open_headline_news_window(dashboard.root, symbol=symbol, result=entry)
+    # Ensure a background refresh is running so new headlines can stream in
+    if not ctrl.is_loading(symbol):
+        start_headline_news_enrichment(dashboard, symbol)
+        entry = ctrl.get(symbol) or entry
+
+    open_headline_news_window(
+        dashboard.root,
+        symbol=symbol,
+        result=entry,
+        controller=ctrl,
+    )
 
 
 def build_headline_news_control(parent, dashboard, *, width: int = 140) -> ctk.CTkFrame:

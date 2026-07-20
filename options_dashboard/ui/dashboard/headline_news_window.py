@@ -1,17 +1,25 @@
 """
 Dashboard Headline News window — preloaded LLM summaries + sentiment.
+
+Shows cached articles immediately and appends newly scraped ones as refresh finishes.
 """
 
 from __future__ import annotations
 
 import webbrowser
+from typing import Optional, Set
 
 import customtkinter as ctk
 
-from data.news_enrichment import EnrichedArticle, NewsEnrichmentResult
+from data.news_cache import article_identity
+from data.news_enrichment import EnrichedArticle, NewsEnrichmentController, NewsEnrichmentResult
 from data.news_scraper import format_local_datetime
 from style.theme import ACCENT_PRIMARY, ACCENT_SUCCESS, TEXT_MUTED, TEXT_SECONDARY, get_fonts
-from ui.dashboard.news_summary_window import open_enriched_article_window
+from ui.dashboard.news_summary_window import (
+    NEWS_CONTENT_WIDTH,
+    create_xy_scrollable_frame,
+    open_enriched_article_window,
+)
 
 
 def open_headline_news_window(
@@ -19,6 +27,7 @@ def open_headline_news_window(
     *,
     symbol: str,
     result: NewsEnrichmentResult,
+    controller: Optional[NewsEnrichmentController] = None,
 ) -> ctk.CTkToplevel:
     """List enriched headlines; click opens the preloaded LLM summary window."""
     fonts = get_fonts()
@@ -26,8 +35,8 @@ def open_headline_news_window(
 
     win = ctk.CTkToplevel(parent)
     win.title(f"Headline News — {symbol}")
-    win.geometry("720x780")
-    win.minsize(520, 480)
+    win.geometry("920x780")
+    win.minsize(760, 520)
     win.transient(parent)
     win.lift()
     win.focus()
@@ -45,49 +54,149 @@ def open_headline_news_window(
         anchor="w",
     ).pack(fill="x", padx=16, pady=(14, 4))
 
-    count = len(result.articles)
-    when = ""
-    if result.fetched_at:
-        when = format_local_datetime(result.fetched_at, fmt="%I:%M:%S %p")
-    meta_bits = [f"{count} article(s)"]
-    if when:
-        meta_bits.append(when)
-    meta_bits.append("LLM summary + sentiment")
-
-    ctk.CTkLabel(
+    meta_label = ctk.CTkLabel(
         header,
-        text="  ·  ".join(meta_bits),
+        text="",
         font=fonts["sm"],
         text_color=TEXT_SECONDARY,
         anchor="w",
-    ).pack(fill="x", padx=16, pady=(0, 6))
+    )
+    meta_label.pack(fill="x", padx=16, pady=(0, 6))
 
-    status_text = "Click a headline to open its summary."
-    if result.errors:
-        status_text = result.errors[-1]
-    ctk.CTkLabel(
+    status_label = ctk.CTkLabel(
         header,
-        text=status_text,
+        text="",
         font=fonts["sm"],
         text_color=TEXT_MUTED,
         anchor="w",
-        wraplength=660,
+        wraplength=NEWS_CONTENT_WIDTH - 40,
         justify="left",
-    ).pack(fill="x", padx=16, pady=(0, 12))
+    )
+    status_label.pack(fill="x", padx=16, pady=(0, 12))
 
-    body = ctk.CTkScrollableFrame(shell, corner_radius=12)
-    body.pack(fill="both", expand=True)
+    body_host = ctk.CTkFrame(shell, fg_color="transparent")
+    body_host.pack(fill="both", expand=True)
+    body = create_xy_scrollable_frame(body_host, corner_radius=12)
 
-    if not result.articles:
-        ctk.CTkLabel(
-            body,
-            text="No articles available.",
-            font=fonts["md"],
-            text_color=TEXT_MUTED,
-        ).pack(pady=40)
-    else:
-        for enriched in result.articles:
-            _make_card(body, win, enriched, fonts)
+    empty_label = ctk.CTkLabel(
+        body,
+        text="No articles available yet — searching…",
+        font=fonts["md"],
+        text_color=TEXT_MUTED,
+    )
+
+    shown_keys: Set[str] = set()
+
+    def _update_header(entry: NewsEnrichmentResult) -> None:
+        count = len(entry.articles)
+        when = ""
+        if entry.fetched_at:
+            when = format_local_datetime(entry.fetched_at, fmt="%I:%M:%S %p")
+        meta_bits = [f"{count} article(s)"]
+        if when:
+            meta_bits.append(when)
+        if entry.is_refreshing or entry.status == "loading":
+            meta_bits.append("searching for updates…")
+        elif entry.from_cache:
+            meta_bits.append("loaded from cache")
+        else:
+            meta_bits.append("LLM summary + sentiment")
+        meta_label.configure(text="  ·  ".join(meta_bits))
+
+        if entry.is_refreshing or entry.status == "loading":
+            status_label.configure(
+                text="Showing saved articles while the scraper looks for new headlines…"
+            )
+        elif entry.new_articles:
+            n = len(entry.new_articles)
+            status_label.configure(
+                text=f"Added {n} new article(s). Click a headline for its summary."
+            )
+        elif entry.errors:
+            status_label.configure(text=entry.errors[-1])
+        else:
+            status_label.configure(text="Click a headline to open its summary.")
+
+    def _ensure_empty_state(has_articles: bool) -> None:
+        try:
+            if has_articles:
+                empty_label.pack_forget()
+            else:
+                empty_label.pack(pady=40)
+        except Exception:
+            pass
+
+    def _prepend_card(enriched: EnrichedArticle) -> None:
+        key = article_identity(enriched)
+        if not key or key in shown_keys:
+            return
+        shown_keys.add(key)
+        _ensure_empty_state(True)
+        card = _make_card(body, win, enriched, fonts)
+        # Move newest cards to the top of the scroll area
+        try:
+            card.pack_forget()
+            children = [w for w in body.winfo_children() if w is not empty_label]
+            if children:
+                card.pack(fill="x", padx=4, pady=6, before=children[0])
+            else:
+                card.pack(fill="x", padx=4, pady=6)
+        except Exception:
+            card.pack(fill="x", padx=4, pady=6)
+
+    def _render_initial(entry: NewsEnrichmentResult) -> None:
+        for child in list(body.winfo_children()):
+            if child is empty_label:
+                continue
+            try:
+                child.destroy()
+            except Exception:
+                pass
+        shown_keys.clear()
+        if not entry.articles:
+            _ensure_empty_state(False)
+        else:
+            _ensure_empty_state(True)
+            # Articles are newest-first; pack in order
+            for enriched in entry.articles:
+                key = article_identity(enriched)
+                if not key or key in shown_keys:
+                    continue
+                shown_keys.add(key)
+                _make_card(body, win, enriched, fonts)
+        _update_header(entry)
+
+    def _on_news_update(sym: str, entry: NewsEnrichmentResult) -> None:
+        if (sym or "").strip().upper() != symbol:
+            return
+        try:
+            if not win.winfo_exists():
+                return
+        except Exception:
+            return
+
+        def apply():
+            try:
+                if not win.winfo_exists():
+                    return
+            except Exception:
+                return
+            # Prefer appending only true newcomers when available
+            newcomers = list(entry.new_articles or [])
+            if newcomers:
+                # new_articles is newest-first; prepend in reverse so final top order is newest-first
+                for enriched in reversed(newcomers):
+                    _prepend_card(enriched)
+            elif entry.articles and not shown_keys:
+                _render_initial(entry)
+            elif entry.articles:
+                for enriched in reversed(entry.articles):
+                    _prepend_card(enriched)
+            _update_header(entry)
+
+        win.after(0, apply)
+
+    _render_initial(result)
 
     footer = ctk.CTkFrame(shell, fg_color="transparent")
     footer.pack(fill="x", pady=(10, 0))
@@ -100,6 +209,14 @@ def open_headline_news_window(
         border_width=1,
         command=win.destroy,
     ).pack(side="right")
+
+    if controller is not None:
+        controller.add_listener(_on_news_update)
+
+        def _cleanup(*_args):
+            controller.remove_listener(_on_news_update)
+
+        win.bind("<Destroy>", _cleanup)
 
     return win
 
@@ -188,7 +305,7 @@ def _make_card(parent, win, enriched: EnrichedArticle, fonts) -> ctk.CTkFrame:
             text_color=TEXT_MUTED,
             anchor="w",
             justify="left",
-            wraplength=640,
+            wraplength=NEWS_CONTENT_WIDTH - 40,
         ).pack(fill="x", padx=12, pady=(0, 10))
     else:
         ctk.CTkFrame(card, fg_color="transparent", height=6).pack()
