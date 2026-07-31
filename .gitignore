@@ -3,14 +3,26 @@
 *.csv
 *.txt
 api_config.json
+email_config.json
+email_config.example.json
 test.py
-
+*.pdf
+*.jpg
+*.png
+*.jpeg
+*.gif
+*.webp
+*.ico
+*.bmp
+*.tiff
+*.svg
 # ignore all .jsons
 *.json
 # except for:
 !options_dashboard/import_themes/
 !options_dashboard/import_themes/*.json
 !options_dashboard/company_tickers.json
+!options_dashboard/email_config.example.json
 # !options_dashboard/US_stock_symbols.json
 # !options_dashboard/US_stock_symbols_verbose.json
 

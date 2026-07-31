@@ -15,59 +15,178 @@ from ui.dashboard.charts_controller import (
 from ui.charts import embed_matplotlib_chart
 
 
+def parse_chart_title(title: str) -> dict:
+    """Parse chart window title into symbol, expiration date, and generation time."""
+    symbol = title.split()[0] if title else ""
+    date_part = ""
+    time_part = ""
+
+    if " - " in title:
+        rest = title.split(" - ", 1)[1]
+        if " | " in rest:
+            date_part, time_part = rest.split(" | ", 1)
+        else:
+            date_part = rest
+
+    return {
+        "symbol": symbol.strip(),
+        "date": date_part.strip(),
+        "time": time_part.strip(),
+        "title": title,
+    }
+
+
 def get_all_active_charts(self):
-    """Get all active chart windows with their symbol/date combinations"""
+    """Get all active chart windows with their symbol/date/time combinations."""
     charts = []
-    
-    # Get tracked chart windows
-    if hasattr(self, '_chart_windows') and self._chart_windows:
+    seen_windows = set()
+
+    def add_chart(window, title):
+        if window in seen_windows:
+            return
+        parsed = parse_chart_title(title)
+        if not parsed["symbol"]:
+            return
+        seen_windows.add(window)
+        charts.append({
+            "symbol": parsed["symbol"],
+            "date": parsed["date"],
+            "time": parsed["time"],
+            "window": window,
+            "title": title,
+        })
+
+    if hasattr(self, "_chart_windows") and self._chart_windows:
         for win in self._chart_windows:
             try:
                 if win.winfo_exists():
                     title = win.title()
-                    # Parse title: "SYMBOL Model Exposure - DATE | TIME"
-                    if "Exposure" in title:
-                        parts = title.split(" - ")
-                        if len(parts) >= 2:
-                            symbol_part = parts[0].split()[0]  # First word is symbol
-                            date_part = parts[1].split(" |")[0].strip()
-                            charts.append({
-                                "symbol": symbol_part,
-                                "date": date_part,
-                                "window": win,
-                                "title": title
-                            })
-            except:
+                    if any(k in title for k in ("Exposure", "Heston", "Analysis", "Chart")):
+                        add_chart(win, title)
+            except Exception:
                 pass
-    
-    # Get untracked chart windows (like Heston charts)
+
     try:
         for child in self.root.winfo_children():
             if isinstance(child, ctk.CTkToplevel):
                 try:
                     if child.winfo_exists():
                         title = child.title()
-                        if any(keyword in title for keyword in ["Exposure", "Heston", "Analysis", "Chart"]):
-                            # Check if not already in charts list
-                            if not any(c["window"] == child for c in charts):
-                                # Parse title
-                                if " - " in title:
-                                    parts = title.split(" - ")
-                                    if len(parts) >= 2:
-                                        symbol_part = parts[0].split()[0]
-                                        date_part = parts[1].split(" |")[0].strip()
-                                        charts.append({
-                                            "symbol": symbol_part,
-                                            "date": date_part,
-                                            "window": child,
-                                            "title": title
-                                        })
-                except:
+                        if any(k in title for k in ("Exposure", "Heston", "Analysis", "Chart")):
+                            add_chart(child, title)
+                except Exception:
                     pass
-    except:
+    except Exception:
         pass
-    
+
+    charts.sort(key=lambda c: (c["symbol"].upper(), c["date"]))
     return charts
+
+
+def chart_list_label(chart: dict) -> str:
+    """Display label: ticker / expiration / generation time."""
+    time_part = chart.get("time") or "—"
+    return f"{chart['symbol']} / {chart['date']} / {time_part}"
+
+
+def find_matching_expiration(self, symbol, date):
+    """Find full expiration key for a symbol and date."""
+    if symbol not in self.ticker_data:
+        return None
+
+    state = self.ticker_data[symbol]
+    if not state or not state.exp_data_map:
+        return None
+
+    for exp in state.exp_data_map.keys():
+        exp_date = exp.split(":")[0] if ":" in exp else exp
+        if exp_date == date:
+            return exp
+    return None
+
+
+def render_chart_figure(self, symbol, date):
+    """Build a matplotlib Figure for the given symbol and expiration date."""
+    matching_exp = find_matching_expiration(self, symbol, date)
+    if not matching_exp:
+        return None
+
+    chart_data = regenerate_chart_data(self, symbol, matching_exp)
+    if not chart_data:
+        return None
+
+    from ui.charts import compute_bar_width, compute_xticks
+
+    fig = Figure(figsize=(9, 6), dpi=100)
+    ax = fig.add_subplot(111)
+
+    df_plot = chart_data["df_plot"]
+    calls = df_plot[df_plot["Type"] == "CALL"]
+    puts = df_plot[df_plot["Type"] == "PUT"]
+    strikes = sorted(df_plot["Strike"].unique())
+    bar_width = compute_bar_width(strikes)
+
+    ax.bar(
+        calls["Strike"],
+        calls["Exposure_Bn"],
+        width=bar_width,
+        color="#2ECC71",
+        edgecolor="black",
+        linewidth=0.6,
+        label="CALL",
+    )
+    ax.bar(
+        puts["Strike"],
+        puts["Exposure_Bn"],
+        width=bar_width,
+        color="#E74C3C",
+        edgecolor="black",
+        linewidth=0.6,
+        label="PUT",
+    )
+    ax.axhline(0, color="black", linewidth=1)
+
+    if chart_data["zero_gamma"]:
+        ax.axvline(
+            chart_data["zero_gamma"],
+            color="purple",
+            linestyle="--",
+            linewidth=1.5,
+            label="Dealer Flip",
+        )
+
+    current_time = datetime.now().strftime("%I:%M %p")
+    ax.set_title(
+        f"{symbol} {chart_data['model_name']} Exposure ({date}) | {current_time}",
+        fontsize=14,
+    )
+    ax.set_xlabel("Strike Price", fontsize=12)
+    ax.set_ylabel(f"{chart_data['model_name']} Exposure (Bn)", fontsize=12)
+    xticks = compute_xticks(strikes)
+    ax.set_xticks(xticks)
+    ax.ticklabel_format(style="plain", axis="x")
+    ax.set_xlim(min(strikes), max(strikes))
+    ax.grid(axis="y", linestyle="--", alpha=0.35)
+    ax.legend()
+    return fig
+
+
+def export_chart_to_path(self, symbol, date, file_path, file_format="png"):
+    """Export a chart to a file path. Returns True on success."""
+    fig = render_chart_figure(self, symbol, date)
+    if fig is None:
+        return False
+
+    try:
+        if file_format == "pdf":
+            fig.savefig(file_path, format="pdf", bbox_inches="tight")
+        elif file_format == "jpeg":
+            fig.savefig(file_path, format="jpeg", dpi=150, bbox_inches="tight")
+        else:
+            fig.savefig(file_path, format="png", dpi=150, bbox_inches="tight")
+        return True
+    except Exception:
+        return False
 
 
 def show_save_images_window(self):
@@ -79,7 +198,7 @@ def show_save_images_window(self):
     # Create main save images window
     save_window = ctk.CTkToplevel(self.root)
     save_window.title("Save Images")
-    save_window.geometry("400x200")
+    save_window.geometry("400x280")
     save_window.transient(self.root)
     save_window.grab_set()
     
@@ -96,6 +215,9 @@ def show_save_images_window(self):
             show_individual_save_window(self)
         elif option == "Save All to PDF Summary":
             save_all_to_pdf(self)
+        elif option == "Send Images":
+            from ui.dashboard.email_ui import show_send_images_window
+            show_send_images_window(self)
     
     # Create option buttons
     individual_btn = ctk.CTkButton(
@@ -117,6 +239,16 @@ def show_save_images_window(self):
         font=ctk.CTkFont(size=14)
     )
     pdf_summary_btn.pack(pady=10)
+
+    send_images_btn = ctk.CTkButton(
+        menu_frame,
+        text="Send Images",
+        command=lambda: option_clicked("Send Images"),
+        width=350,
+        height=50,
+        font=ctk.CTkFont(size=14),
+    )
+    send_images_btn.pack(pady=10)
 
 
 def show_individual_save_window(self):
@@ -212,125 +344,31 @@ def show_individual_save_window(self):
 
 def save_individual_chart(self, symbol, date, file_format):
     """Save an individual chart to file"""
-    # Find the full expiration string from ticker_data
-    if symbol not in self.ticker_data:
-        dialogs.error("Error", f"No data available for {symbol}")
-        return
-    
-    state = self.ticker_data[symbol]
-    if not state or not state.exp_data_map:
-        dialogs.error("Error", f"No expiration data available for {symbol}")
-        return
-    
-    # Find matching expiration
-    matching_exp = None
-    for exp in state.exp_data_map.keys():
-        exp_date = exp.split(":")[0] if ":" in exp else exp
-        if exp_date == date:
-            matching_exp = exp
-            break
-    
-    if not matching_exp:
-        dialogs.error("Error", f"Could not find expiration data for {symbol} - {date}")
-        return
-    
-    # Regenerate chart data
-    chart_data = regenerate_chart_data(self, symbol, matching_exp)
-    if not chart_data:
-        dialogs.error("Error", f"Could not regenerate chart data for {symbol} - {date}")
-        return
-    
-    # Get file extension
     ext_map = {"png": ".png", "jpeg": ".jpg", "pdf": ".pdf"}
     ext = ext_map.get(file_format, ".png")
-    
-    # Create default filename
     safe_date = date.replace("/", "-").replace(":", "-")
     default_filename = f"{symbol}_{safe_date}_exposure{ext}"
-    
-    # Ask user for save location
+
     file_path = filedialog.asksaveasfilename(
         defaultextension=ext,
         filetypes=[(f"{file_format.upper()} files", f"*{ext}"), ("All files", "*.*")],
-        initialfile=default_filename
+        initialfile=default_filename,
     )
-    
+
     if not file_path:
-        return  # User cancelled
-    
+        return
+
     try:
-        # Create a new figure for saving
-        fig = Figure(figsize=(9, 6), dpi=100)
-        ax = fig.add_subplot(111)
-        
-        # Recreate the chart
-        from ui.charts import compute_bar_width, compute_xticks
-        df_plot = chart_data["df_plot"]
-        calls = df_plot[df_plot["Type"] == "CALL"]
-        puts = df_plot[df_plot["Type"] == "PUT"]
-        strikes = sorted(df_plot["Strike"].unique())
-        bar_width = compute_bar_width(strikes)
-        
-        ax.bar(
-            calls["Strike"],
-            calls["Exposure_Bn"],
-            width=bar_width,
-            color="#2ECC71",
-            edgecolor="black",
-            linewidth=0.6,
-            label="CALL"
-        )
-        
-        ax.bar(
-            puts["Strike"],
-            puts["Exposure_Bn"],
-            width=bar_width,
-            color="#E74C3C",
-            edgecolor="black",
-            linewidth=0.6,
-            label="PUT"
-        )
-        
-        ax.axhline(0, color="black", linewidth=1)
-        
-        if chart_data["zero_gamma"]:
-            ax.axvline(
-                chart_data["zero_gamma"],
-                color="purple",
-                linestyle="--",
-                linewidth=1.5,
-                label="Dealer Flip"
-            )
-        
-        current_time = datetime.now().strftime('%I:%M %p')
-        ax.set_title(
-            f"{symbol} {chart_data['model_name']} Exposure ({date}) | {current_time}",
-            fontsize=14
-        )
-        ax.set_xlabel("Strike Price", fontsize=12)
-        ax.set_ylabel(f"{chart_data['model_name']} Exposure (Bn)", fontsize=12)
-        xticks = compute_xticks(strikes)
-        ax.set_xticks(xticks)
-        ax.ticklabel_format(style="plain", axis="x")
-        ax.set_xlim(min(strikes), max(strikes))
-        ax.grid(axis="y", linestyle="--", alpha=0.35)
-        ax.legend()
-        
-        # Save the figure
-        if file_format == "pdf":
-            fig.savefig(file_path, format="pdf", bbox_inches="tight")
-        elif file_format == "jpeg":
-            fig.savefig(file_path, format="jpeg", dpi=150, bbox_inches="tight")
-        else:  # PNG
-            fig.savefig(file_path, format="png", dpi=150, bbox_inches="tight")
-        
+        if not export_chart_to_path(self, symbol, date, file_path, file_format):
+            dialogs.error("Error", f"Could not export chart for {symbol} - {date}")
+            return
+
         dialogs.show_timed_message(
             self.root,
             "Success",
             f"Chart saved to:\n{file_path}",
-            duration_ms=3000
+            duration_ms=3000,
         )
-        
     except Exception as e:
         dialogs.error("Save Error", f"Failed to save chart:\n{str(e)}")
 
@@ -384,90 +422,13 @@ def save_all_to_pdf(self):
                 progress_window.update()
                 
                 # Find matching expiration
-                symbol = chart['symbol']
-                date = chart['date']
-                
-                if symbol not in self.ticker_data:
+                symbol = chart["symbol"]
+                date = chart["date"]
+
+                fig = render_chart_figure(self, symbol, date)
+                if fig is None:
                     continue
-                
-                state = self.ticker_data[symbol]
-                if not state or not state.exp_data_map:
-                    continue
-                
-                # Find matching expiration
-                matching_exp = None
-                for exp in state.exp_data_map.keys():
-                    exp_date = exp.split(":")[0] if ":" in exp else exp
-                    if exp_date == date:
-                        matching_exp = exp
-                        break
-                
-                if not matching_exp:
-                    continue
-                
-                # Regenerate chart data
-                chart_data = regenerate_chart_data(self, symbol, matching_exp)
-                if not chart_data:
-                    continue
-                
-                # Create figure
-                fig = Figure(figsize=(9, 6), dpi=100)
-                ax = fig.add_subplot(111)
-                
-                # Recreate the chart
-                from ui.charts import compute_bar_width, compute_xticks
-                df_plot = chart_data["df_plot"]
-                calls = df_plot[df_plot["Type"] == "CALL"]
-                puts = df_plot[df_plot["Type"] == "PUT"]
-                strikes = sorted(df_plot["Strike"].unique())
-                bar_width = compute_bar_width(strikes)
-                
-                ax.bar(
-                    calls["Strike"],
-                    calls["Exposure_Bn"],
-                    width=bar_width,
-                    color="#2ECC71",
-                    edgecolor="black",
-                    linewidth=0.6,
-                    label="CALL"
-                )
-                
-                ax.bar(
-                    puts["Strike"],
-                    puts["Exposure_Bn"],
-                    width=bar_width,
-                    color="#E74C3C",
-                    edgecolor="black",
-                    linewidth=0.6,
-                    label="PUT"
-                )
-                
-                ax.axhline(0, color="black", linewidth=1)
-                
-                if chart_data["zero_gamma"]:
-                    ax.axvline(
-                        chart_data["zero_gamma"],
-                        color="purple",
-                        linestyle="--",
-                        linewidth=1.5,
-                        label="Dealer Flip"
-                    )
-                
-                current_time = datetime.now().strftime('%I:%M %p')
-                ax.set_title(
-                    f"{symbol} {chart_data['model_name']} Exposure ({date}) | {current_time}",
-                    fontsize=14
-                )
-                ax.set_xlabel("Strike Price", fontsize=12)
-                ax.set_ylabel(f"{chart_data['model_name']} Exposure (Bn)", fontsize=12)
-                xticks = compute_xticks(strikes)
-                ax.set_xticks(xticks)
-                ax.ticklabel_format(style="plain", axis="x")
-                ax.set_xlim(min(strikes), max(strikes))
-                ax.grid(axis="y", linestyle="--", alpha=0.35)
-                ax.legend()
-                
-                # Save page to PDF
+
                 pdf.savefig(fig, bbox_inches="tight")
         
         progress_window.destroy()

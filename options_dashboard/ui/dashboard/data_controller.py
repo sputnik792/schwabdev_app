@@ -602,6 +602,11 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                     
                     # Record ticker search in history only on successful fetch
                     record_ticker_search(symbol)
+                    if hasattr(dashboard, "refresh_recent_ticker_buttons"):
+                        try:
+                            dashboard.refresh_recent_ticker_buttons()
+                        except Exception:
+                            pass
                     
                     # Show completion message for 2 seconds
                     dialogs.show_timed_message(

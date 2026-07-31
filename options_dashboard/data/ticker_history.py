@@ -8,13 +8,15 @@ Stores count and date for prioritizing autocomplete suggestions.
 import json
 import os
 import datetime
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 # Path to the ticker history file (in project root, same as app_state.json)
 HISTORY_FILE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
     "ticker_history.json"
 )
+
+RECENT_TICKER_LIMIT = 5
 
 
 def load_ticker_history() -> Dict[str, Dict[str, any]]:
@@ -68,6 +70,36 @@ def record_ticker_search(ticker: str):
         }
     
     save_ticker_history(history)
+
+
+def get_recent_tickers(limit: int = RECENT_TICKER_LIMIT) -> List[str]:
+    """
+    Return the most recently used tickers (by last search date), newest first.
+    """
+    history = load_ticker_history()
+    ranked: List[Tuple[str, str, int]] = []
+    for ticker, entry in history.items():
+        sym = (ticker or "").strip().upper()
+        if not sym:
+            continue
+        ranked.append(
+            (
+                sym,
+                str(entry.get("date") or "1970-01-01"),
+                int(entry.get("count") or 0),
+            )
+        )
+    ranked.sort(key=lambda row: (row[1], row[2]), reverse=True)
+    out: List[str] = []
+    seen = set()
+    for sym, _, _ in ranked:
+        if sym in seen:
+            continue
+        seen.add(sym)
+        out.append(sym)
+        if len(out) >= limit:
+            break
+    return out
 
 
 def get_ticker_priority(ticker: str) -> Tuple[int, str, str]:

@@ -16,6 +16,7 @@ from ui.dashboard.data_controller import fetch_single_symbol_for_view
 from ui.dashboard.refresh import manual_refresh_all_tickers
 from ml_features.ticker_autocomplete import TickerAutocomplete
 from style.theme import get_fonts
+from ui.dashboard.recent_tickers import build_recent_ticker_bar
 
 def build_layout(self):
     fonts = get_fonts()
@@ -51,6 +52,9 @@ def build_layout(self):
             if option == "Save Images":
                 from ui.dashboard.save_images import show_save_images_window
                 show_save_images_window(self)
+            elif option == "Contacts":
+                from ui.dashboard.email_ui import show_contacts_window
+                show_contacts_window(self)
             elif option == "Auto Refresh":
                 show_auto_refresh_settings(self)
             elif option == "Color Theme":
@@ -61,7 +65,7 @@ def build_layout(self):
                 # TODO: Implement about dialog
                 pass
         
-        menu_options = ["Save Images", "Auto Refresh", "Color Theme", "API Credentials", "About"]
+        menu_options = ["Save Images", "Contacts", "Auto Refresh", "Color Theme", "API Credentials", "About"]
         for option in menu_options:
             btn = ctk.CTkButton(
                 menu_frame,
@@ -1276,7 +1280,7 @@ def show_single_view(self):
             variable=exp_var,
             values=[],  # Will be populated when data is loaded
             command=on_expiration_selected,
-            width=300,
+            width=200,
             font=ctk.CTkFont(size=14),
             dropdown_font=ctk.CTkFont(size=16),
             height=36
@@ -1321,11 +1325,25 @@ def show_single_view(self):
         ticker_panel = ctk.CTkFrame(header_row, corner_radius=16)
         ticker_panel.pack(side="left", fill="y", padx=(0, 16))
         
+        def _on_recent_ticker_selected(_symbol: str) -> None:
+            if hasattr(self, "single_view_autocomplete"):
+                self.single_view_autocomplete._hide_suggestions()
+            if hasattr(self, "single_view_autocomplete_container"):
+                self.single_view_autocomplete_container.pack_forget()
+
+        recent_bar, refresh_recent = build_recent_ticker_bar(
+            ticker_panel,
+            ticker_var,
+            on_select=_on_recent_ticker_selected,
+        )
+        recent_bar.pack(fill="x", pady=(12, 0))
+        self.refresh_recent_ticker_buttons = refresh_recent
+
         ctk.CTkLabel(
             ticker_panel,
             text="Ticker Symbol",
             font=ctk.CTkFont(size=14, weight="bold")
-        ).pack(pady=(16, 10), padx=16)
+        ).pack(pady=(10, 10), padx=16)
         
         ticker_entry = ctk.CTkEntry(
             ticker_panel,
@@ -1383,13 +1401,13 @@ def show_single_view(self):
                     autocomplete_container,
                     text=ticker,
                     command=lambda t=ticker: autocomplete._select_ticker(t),
-                    width=150,
-                    height=28,
-                    font=ctk.CTkFont(size=12),
+                    width=52,
+                    height=26,
+                    font=fonts["sm"],
                     fg_color=("gray75", "gray25"),
                     hover_color=("gray65", "gray35")
                 )
-                btn.pack(pady=2, fill="x")
+                btn.pack(side="left", padx=2, pady=2)
             
             autocomplete.is_visible = True
         
@@ -1576,6 +1594,12 @@ def show_single_view(self):
     
     # Show single view
     self.single_view.pack(fill="both", expand=True)
+
+    if hasattr(self, "refresh_recent_ticker_buttons"):
+        try:
+            self.refresh_recent_ticker_buttons()
+        except Exception:
+            pass
     
     # Update Info button state after single-view is shown
     if hasattr(self, 'update_info_button_state'):

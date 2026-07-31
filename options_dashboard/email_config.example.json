@@ -1,0 +1,19 @@
+{
+  "smtp_host": "smtp.gmail.com",
+  "smtp_port": 587,
+  "main": {
+    "name": "Your Name",
+    "email": "you@gmail.com",
+    "smtp_username": "you@gmail.com",
+    "app_password": "your-16-char-app-password"
+  },
+  "default_receiver": "recipient@example.com",
+  "contacts": [
+    {
+      "name": "Contact Name",
+      "email": "contact@example.com",
+      "smtp_username": "",
+      "app_password": ""
+    }
+  ]
+}

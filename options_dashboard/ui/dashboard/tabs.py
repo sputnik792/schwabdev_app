@@ -302,7 +302,7 @@ def create_stock_tab(self, symbol):
         variable=exp_var,
         values=[],  # Will be populated when data is loaded
         command=on_expiration_selected,
-        width=300,
+        width=200,
         font=ctk.CTkFont(size=14),
         dropdown_font=ctk.CTkFont(size=16),
         height=36
