@@ -11,3 +11,7 @@ def volga_exposure(volga, vega, oi):
 
 def charm_exposure(charm, spot, oi):
     return charm * oi * CONTRACT_MULTIPLIER * spot
+
+def delta_exposure(delta, spot, oi):
+    """Dollar delta exposure: delta * OI * multiplier * spot."""
+    return delta * oi * CONTRACT_MULTIPLIER * spot

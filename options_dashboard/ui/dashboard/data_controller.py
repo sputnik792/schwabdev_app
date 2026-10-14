@@ -8,7 +8,7 @@ from state.strike_count_prefs import (
     persisted_strike_count_label,
 )
 from data.schwab_api import (
-    fetch_stock_price,
+    fetch_stock_quote,
     fetch_option_chain,
     strike_count_label_to_api,
 )
@@ -92,7 +92,8 @@ def on_strike_count_change(dashboard, tab_key, strike_label):
 
     def worker():
         try:
-            price = state.price if state.price else fetch_stock_price(dashboard.client, actual_symbol)
+            quote = fetch_stock_quote(dashboard.client, actual_symbol)
+            price = quote.get("price") or (state.price if state.price else 0.0)
             exp_map, expirations = fetch_exp_map_with_prob_itm(
                 dashboard.client, actual_symbol, price, strike_label
             )
@@ -103,6 +104,7 @@ def on_strike_count_change(dashboard, tab_key, strike_label):
                 exp_data_map=exp_map,
                 last_updated=datetime.datetime.now(),
                 strike_count_label=strike_label,
+                quote=quote,
             )
             if state and getattr(state, "_from_single_view", False):
                 new_state._from_single_view = True
@@ -164,7 +166,8 @@ def on_strike_count_change(dashboard, tab_key, strike_label):
 def fetch_worker(self, symbol):
     try:
         strike_label = get_strike_count_label(self, symbol)
-        price = fetch_stock_price(self.client, symbol)
+        quote = fetch_stock_quote(self.client, symbol)
+        price = quote.get("price") or 0.0
         exp_map, expirations = fetch_exp_map_with_prob_itm(
             self.client, symbol, price, strike_label
         )
@@ -176,6 +179,7 @@ def fetch_worker(self, symbol):
             exp_data_map=exp_map,
             last_updated=datetime.datetime.now(),
             strike_count_label=strike_label,
+            quote=quote,
         )
 
         def update_ui():
@@ -291,7 +295,8 @@ def fetch_single_symbol(dashboard, symbol):
     def worker():
         try:
             strike_label = get_strike_count_label(dashboard, symbol)
-            price = fetch_stock_price(dashboard.client, symbol)
+            quote = fetch_stock_quote(dashboard.client, symbol)
+            price = quote.get("price") or 0.0
             exp_map, expirations = fetch_exp_map_with_prob_itm(
                 dashboard.client, symbol, price, strike_label
             )
@@ -303,6 +308,7 @@ def fetch_single_symbol(dashboard, symbol):
                 exp_data_map=exp_map,
                 last_updated=datetime.datetime.now(),
                 strike_count_label=strike_label,
+                quote=quote,
             )
 
             def update():
@@ -347,7 +353,8 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
     def worker():
         try:
             strike_label = get_strike_count_label(dashboard, symbol)
-            price = fetch_stock_price(dashboard.client, symbol)
+            quote = fetch_stock_quote(dashboard.client, symbol)
+            price = quote.get("price") or 0.0
             exp_map, expirations = fetch_exp_map_with_prob_itm(
                 dashboard.client, symbol, price, strike_label
             )
@@ -359,6 +366,7 @@ def fetch_single_symbol_for_view(dashboard, symbol, ticker_var, price_var, exp_v
                 exp_data_map=exp_map,
                 last_updated=datetime.datetime.now(),
                 strike_count_label=strike_label,
+                quote=quote,
             )
 
             def update():

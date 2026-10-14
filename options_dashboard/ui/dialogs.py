@@ -24,8 +24,6 @@ def show_timed_message(root, title, message, duration_ms=3000):
     # Light green background for completion messages
     dialog.configure(bg="#e6ffe6")
 
-    # Make dialog stay on top
-    dialog.attributes("-topmost", True)
     dialog.lift()
     dialog.focus()
 
@@ -56,15 +54,6 @@ def show_timed_message(root, title, message, duration_ms=3000):
     dialog.update_idletasks()
     dialog.update()
 
-    # Keep dialog on top during its lifetime
-    def keep_on_top():
-        dialog.attributes("-topmost", True)
-        dialog.lift()
-    
-    # Refresh on-top status periodically
-    for i in range(0, duration_ms, 100):
-        dialog.after(i, keep_on_top)
-    
     dialog.after(duration_ms, dialog.destroy)
 
     # Don't make transient to root to avoid bringing main window forward
@@ -111,7 +100,6 @@ def show_fetching_dialog(root, title="Fetching", message="Fetching options data.
     dialog.update_idletasks()
     dialog.update()
 
-    dialog.transient(root)
     dialog.lift()
     dialog.focus()
     

@@ -1,6 +1,6 @@
 import threading
 from ui import dialogs
-from data.schwab_api import fetch_stock_price
+from data.schwab_api import fetch_stock_quote
 from ui.dashboard.data_controller import get_strike_count_label, fetch_exp_map_with_prob_itm
 from state.app_state import get_state_value
 from ui.dashboard.tabs import reapply_highlighting_for_symbol
@@ -24,7 +24,8 @@ def auto_refresh_price(self):
 
         def worker(sym=symbol):
             try:
-                price = fetch_stock_price(self.client, sym)
+                quote = fetch_stock_quote(self.client, sym)
+                price = quote.get("price") or 0.0
                 if price <= 0:
                     return
 
@@ -43,6 +44,7 @@ def auto_refresh_price(self):
                         return
 
                     state.price = price
+                    state.quote = quote
                     ui["price_var"].set(f"${price:.2f}")
                     # Re-apply highlighting with new price
                     reapply_highlighting_for_symbol(self, sym)
@@ -166,12 +168,14 @@ def manual_refresh_all_tickers(dashboard):
             
             # Refresh price
             try:
-                price = fetch_stock_price(dashboard.client, symbol)
+                quote = fetch_stock_quote(dashboard.client, symbol)
+                price = quote.get("price") or 0.0
                 if price > 0:
                     def update_price():
                         state = dashboard.ticker_data.get(symbol)
                         if state:
                             state.price = price
+                            state.quote = quote
                             # Update UI for multi-view
                             if symbol in dashboard.ticker_tabs:
                                 ui = dashboard.ticker_tabs[symbol]

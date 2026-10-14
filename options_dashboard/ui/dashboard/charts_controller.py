@@ -4,8 +4,8 @@ import tkinter as tk
 from tkinter import ttk
 import pandas as pd
 from ui import dialogs
-from models.greeks import gamma, vanna, volga, charm, vega
-from models.exposure import gamma_exposure, vanna_exposure, volga_exposure, charm_exposure
+from models.greeks import bs_delta, gamma, to_float, vanna, volga, charm, vega
+from models.exposure import gamma_exposure, vanna_exposure, volga_exposure, charm_exposure, delta_exposure
 
 from ui.charts import build_exposure_dataframe, generate_altair_chart, embed_matplotlib_chart
 from utils.time import time_to_expiration
@@ -13,6 +13,7 @@ from models.dealer import find_zero_gamma
 from config import RISK_FREE_RATE, DIVIDEND_YIELD
 from ui.charts import open_altair_chart
 from ui.controls import spot_slider
+from ui.windowing import make_independent
 
 def generate_selected_chart(self, spot_override=None):
     # Initialize tracking sets if needed (do this first for all views)
@@ -96,39 +97,45 @@ def generate_selected_chart(self, spot_override=None):
 
     CONTRACT_MULT = 100
     rows = []
-    # Use itertuples() instead of iterrows() for better performance
+    model_name = self.model_var.get()
     df = state.exp_data_map[exp]
     for row in df.itertuples(index=False):
-        K = float(row.Strike) if hasattr(row, 'Strike') else 0
+        K = to_float(row.Strike if hasattr(row, 'Strike') else 0)
         if K <= 0:
             continue
 
         for opt in ("CALL", "PUT"):
-            # Column names are IV_Call, OI_Call, IV_Put, OI_Put (capital C/P)
-            opt_key = opt.capitalize()  # "CALL" -> "Call", "PUT" -> "Put"
-            iv_attr = f"IV_{opt_key}"
-            oi_attr = f"OI_{opt_key}"
-            iv = float(getattr(row, iv_attr, 0) or 0)
-            oi = float(getattr(row, oi_attr, 0) or 0)
+            opt_key = opt.capitalize()
+            iv = to_float(getattr(row, f"IV_{opt_key}", 0))
+            oi = to_float(getattr(row, f"OI_{opt_key}", 0))
             if iv <= 0 or oi <= 0:
                 continue
 
             sign = 1 if opt == "CALL" else -1
 
             # ---------- GAMMA ----------
-            if self.model_var.get() == "Gamma":
+            if model_name == "Gamma":
                 g = gamma(spot, K, T, RISK_FREE_RATE, DIVIDEND_YIELD, iv)
                 scale = oi * CONTRACT_MULT * (spot ** 2) * 0.01
-                exp_val = sign * g * scale   # ONLY gamma uses sign flip
+                exp_val = sign * g * scale
+
+            # ---------- DELTA / DEX ----------
+            elif model_name == "Delta":
+                chain_delta = float(getattr(row, f"Delta_{opt_key}", 0) or 0)
+                if abs(chain_delta) < 1e-8:
+                    chain_delta = bs_delta(
+                        spot, K, T, RISK_FREE_RATE, DIVIDEND_YIELD, iv, opt
+                    )
+                exp_val = delta_exposure(chain_delta, spot, oi)
 
             # ---------- VANNA ----------
-            elif self.model_var.get() == "Vanna":
+            elif model_name == "Vanna":
                 v = vanna(spot, K, T, RISK_FREE_RATE, DIVIDEND_YIELD, iv)
                 scale = oi * CONTRACT_MULT * spot * iv
                 exp_val = sign * abs(v) * scale
 
             # ---------- VOLGA ----------
-            elif self.model_var.get() == "Volga":
+            elif model_name == "Volga":
                 vg = volga(spot, K, T, RISK_FREE_RATE, DIVIDEND_YIELD, iv)
                 ve = vega(spot, K, T, RISK_FREE_RATE, DIVIDEND_YIELD, iv)
                 scale = oi * ve
@@ -202,7 +209,6 @@ def generate_selected_chart(self, spot_override=None):
         if hasattr(self, 'update_focus_bar'):
             self.update_focus_bar()
         
-        # Embed the chart
         embed_matplotlib_chart(
             win,
             df_plot,
@@ -210,38 +216,12 @@ def generate_selected_chart(self, spot_override=None):
             exp_date,
             model_name,
             total,
-            zero_gamma
+            zero_gamma,
+            spot_price=spot,
         )
-        
-        # Bring window to front immediately after embedding
-        win.update_idletasks()
+        make_independent(win)
         win.lift()
         win.focus()
-        
-        # Bring ALL chart windows to front AFTER chart is embedded
-        # (this ensures previous charts don't get pushed behind)
-        def bring_all_charts_front():
-            if hasattr(self, '_chart_windows') and self._chart_windows:
-                for chart_win in self._chart_windows:
-                    try:
-                        if chart_win.winfo_exists():
-                            chart_win.lift()
-                            chart_win.focus()
-                    except:
-                        pass
-                # Focus the most recently created window
-                try:
-                    if win.winfo_exists():
-                        win.lift()
-                        win.focus()
-                except:
-                    pass
-        
-        # Bring to front after delays to ensure they stay
-        win.after(50, bring_all_charts_front)
-        win.after(150, bring_all_charts_front)
-        win.after(300, bring_all_charts_front)
-        win.after(500, bring_all_charts_front)
         
         # For single view, remove from generating set after a delay
         if is_single_view:
@@ -830,12 +810,10 @@ def get_ticker_chart_windows(self, symbol):
 def regenerate_chart_data(self, symbol, exp):
     """Regenerate chart data for a specific symbol and expiration"""
     from utils.time import time_to_expiration
-    
-    # Get ticker state
-    if symbol not in self.ticker_data:
-        return None
-    
-    state = self.ticker_data[symbol]
+    from ui.dashboard.save_images import resolve_ticker_state
+
+    # Get ticker state (accept BRK/B, BRK.B, BRK-B variants)
+    _key, state = resolve_ticker_state(self, symbol)
     if not state or exp not in state.exp_data_map:
         return None
     
@@ -866,8 +844,8 @@ def regenerate_chart_data(self, symbol, exp):
             opt_key = opt.capitalize()
             iv_attr = f"IV_{opt_key}"
             oi_attr = f"OI_{opt_key}"
-            iv = float(getattr(row, iv_attr, 0) or 0)
-            oi = float(getattr(row, oi_attr, 0) or 0)
+            iv = to_float(getattr(row, iv_attr, 0))
+            oi = to_float(getattr(row, oi_attr, 0))
             if iv <= 0 or oi <= 0:
                 continue
 
@@ -877,6 +855,13 @@ def regenerate_chart_data(self, symbol, exp):
                 g = gamma(spot, K, T, RISK_FREE_RATE, DIVIDEND_YIELD, iv)
                 scale = oi * CONTRACT_MULT * (spot ** 2) * 0.01
                 exp_val = sign * g * scale
+            elif model_name == "Delta":
+                chain_delta = float(getattr(row, f"Delta_{opt_key}", 0) or 0)
+                if abs(chain_delta) < 1e-8:
+                    chain_delta = bs_delta(
+                        spot, K, T, RISK_FREE_RATE, DIVIDEND_YIELD, iv, opt
+                    )
+                exp_val = delta_exposure(chain_delta, spot, oi)
             elif model_name == "Vanna":
                 v = vanna(spot, K, T, RISK_FREE_RATE, DIVIDEND_YIELD, iv)
                 scale = oi * CONTRACT_MULT * spot * iv
@@ -919,7 +904,8 @@ def regenerate_chart_data(self, symbol, exp):
         "exp_date": exp.split(":")[0],
         "model_name": model_name,
         "total": total,
-        "zero_gamma": zero_gamma
+        "zero_gamma": zero_gamma,
+        "spot": spot,
     }
 
 def merge_ticker_charts_to_new_window(self, symbol):

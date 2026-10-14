@@ -3,34 +3,72 @@ from scipy.stats import norm
 import numpy as np
 import pandas as pd
 
+
+def to_float(value, default=0.0):
+    try:
+        if value is None or value == "":
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def normalize_iv(iv):
+    """Schwab often sends IV as percent (45.2). Black-Scholes needs decimal (0.452)."""
+    iv = to_float(iv)
+    if iv <= 0:
+        return 0.0
+    if iv > 2.5:
+        return iv / 100.0
+    return iv
+
+
 def d1(S, K, T, r, q, sigma):
+    sigma = normalize_iv(sigma)
     return (log(S / K) + (r - q + 0.5 * sigma**2) * T) / (sigma * sqrt(T))
 
 def d2(S, K, T, r, q, sigma):
+    sigma = normalize_iv(sigma)
     return d1(S, K, T, r, q, sigma) - sigma * sqrt(T)
 
+def bs_delta(S, K, T, r, q, sigma, option_type="CALL"):
+    sigma = normalize_iv(sigma)
+    if T <= 0 or sigma <= 0 or S <= 0 or K <= 0:
+        return 0.0
+    d1v = d1(S, K, T, r, q, sigma)
+    disc = exp(-q * T)
+    if option_type.upper() == "PUT":
+        return disc * (norm.cdf(d1v) - 1.0)
+    return disc * norm.cdf(d1v)
+
+
 def gamma(S, K, T, r, q, sigma):
+    sigma = normalize_iv(sigma)
     if T <= 0 or sigma <= 0 or S <= 0 or K <= 0:
         return 0.0
     return exp(-q * T) * norm.pdf(d1(S, K, T, r, q, sigma)) / (S * sigma * sqrt(T))
 
 def vega(S, K, T, r, q, sigma):
+    sigma = normalize_iv(sigma)
     if T <= 0 or sigma <= 0 or S <= 0 or K <= 0:
         return 0.0
     return S * exp(-q * T) * norm.pdf(d1(S, K, T, r, q, sigma)) * sqrt(T)
 
 def vanna(S, K, T, r, q, sigma):
+    sigma = normalize_iv(sigma)
     if T <= 0 or sigma <= 0:
         return 0.0
     return exp(-q * T) * norm.pdf(d1(S, K, T, r, q, sigma)) * d2(S, K, T, r, q, sigma) / sigma
 
 def volga(S, K, T, r, q, sigma):
+    sigma = normalize_iv(sigma)
     if T <= 0 or sigma <= 0:
         return 0.0
     v = vega(S, K, T, r, q, sigma)
     return v * d1(S, K, T, r, q, sigma) * d2(S, K, T, r, q, sigma) / sigma
 
 def charm(S, K, T, r, q, sigma):
+    sigma = normalize_iv(sigma)
     if T <= 0 or sigma <= 0:
         return 0.0
     d1v = d1(S, K, T, r, q, sigma)

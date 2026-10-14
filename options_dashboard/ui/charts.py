@@ -134,7 +134,8 @@ def embed_matplotlib_chart(
     expiration,
     model_name,
     total_exposure,
-    zero_gamma=None
+    zero_gamma=None,
+    spot_price=None,
 ):
     fig = Figure(figsize=(9, 6), dpi=100)
     ax = fig.add_subplot(111)
@@ -165,6 +166,15 @@ def embed_matplotlib_chart(
 
     ax.axhline(0, color="black", linewidth=1)
 
+    if spot_price:
+        ax.axvline(
+            spot_price,
+            color="#3b82f6",
+            linestyle="--",
+            linewidth=1.5,
+            label=f"Spot {spot_price:.2f}",
+        )
+
     if zero_gamma:
         ax.axvline(
             zero_gamma,
@@ -175,9 +185,11 @@ def embed_matplotlib_chart(
         )
 
     current_time = datetime.datetime.now().strftime('%I:%M %p')
+    subtitle = f"spot ${spot_price:.2f}" if spot_price else ""
     ax.set_title(
-        f"{symbol} {model_name} Exposure ({expiration}) | {current_time}",
-        fontsize=14
+        f"{symbol} {model_name} Exposure ({expiration}) | {current_time}"
+        + (f"\n{subtitle}" if subtitle else ""),
+        fontsize=13
     )
     ax.set_xlabel("Strike Price", fontsize=12)
     ax.set_ylabel(f"{model_name} Exposure (Bn)", fontsize=12)
@@ -192,8 +204,5 @@ def embed_matplotlib_chart(
     toolbar = NavigationToolbar2Tk(canvas, parent)
     toolbar.update()
     canvas.get_tk_widget().pack(fill="both", expand=True)
-    # Bring parent window to front after embedding (embedding can cause focus loss)
     parent.update_idletasks()
-    parent.lift()
-    parent.focus()
     return fig

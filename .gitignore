@@ -4,7 +4,6 @@
 *.txt
 api_config.json
 email_config.json
-email_config.example.json
 test.py
 *.pdf
 *.jpg

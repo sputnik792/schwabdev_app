@@ -305,12 +305,12 @@ def build_layout(self):
     self.main.pack(fill="both", expand=True, padx=12, pady=(0, 12))
 
     # ---------- Sidebar (Global - always visible) ----------
-    self.sidebar_container = ctk.CTkFrame(self.main, width=260)
+    self.sidebar_container = ctk.CTkFrame(self.main, width=340)
     self.sidebar_container.pack(side="left", fill="y", padx=(0, 12))
     self.sidebar_container.pack_propagate(False)
     
     # Create scrollable sidebar
-    self.sidebar = ctk.CTkScrollableFrame(self.sidebar_container, width=240)
+    self.sidebar = ctk.CTkScrollableFrame(self.sidebar_container, width=320)
     self.sidebar.pack(fill="both", expand=True, padx=10, pady=10)
     
     build_sidebar(self)
@@ -647,7 +647,7 @@ def build_sidebar(self):
     ctk.CTkLabel(self.sidebar, text="Exposure Model").pack(pady=(0, 5))
     model_button = ctk.CTkSegmentedButton(
         self.sidebar,
-        values=["Gamma", "Vanna", "Volga", "Charm"],
+        values=["Gamma", "Delta", "Vanna", "Volga", "Charm"],
         variable=self.model_var,
         command=on_model_change
     )
@@ -670,6 +670,28 @@ def build_sidebar(self):
         command=self.open_data_analysis_tools
     )
     self.data_analysis_button.pack(fill="x", padx=10, pady=6)
+
+    def open_tape_tools():
+        from ui.dashboard.tape_tools import show_tape_tools_window
+        show_tape_tools_window(self)
+
+    self.tape_tools_button = ctk.CTkButton(
+        self.sidebar,
+        text="Tape Tools",
+        command=open_tape_tools,
+    )
+    self.tape_tools_button.pack(fill="x", padx=10, pady=6)
+
+    def open_semi_book():
+        from ui.dashboard.tape_tools import show_semi_book_window
+        show_semi_book_window(self)
+
+    self.semi_book_button = ctk.CTkButton(
+        self.sidebar,
+        text="Semi Book",
+        command=open_semi_book,
+    )
+    self.semi_book_button.pack(fill="x", padx=10, pady=6)
     
     # Graph Tools popup menu (click-activated, like Options Dashboard)
     from ui.dashboard.charts_controller import close_all_chart_windows, has_active_chart_windows, get_tickers_with_charts, merge_ticker_charts_to_new_window

@@ -18,6 +18,7 @@ from ui.dashboard.save_images import (
     chart_list_label,
     export_chart_to_path,
     get_all_active_charts,
+    safe_filename_component,
 )
 from utils.email_sender import add_contact, get_contacts, get_main_account, send_email
 
@@ -470,16 +471,19 @@ def show_send_images_window(dashboard) -> None:
         paths: List[str] = []
         temp_dir = tempfile.mkdtemp(prefix="od_charts_")
 
-        for chart in selected_charts:
+        for index, chart in enumerate(selected_charts):
             symbol = chart["symbol"]
             date = chart["date"]
-            safe_date = date.replace("/", "-").replace(":", "-")
+            safe_symbol = safe_filename_component(symbol)
+            safe_date = safe_filename_component(date)
             file_path = os.path.join(
                 temp_dir,
-                f"{symbol}_{safe_date}_exposure.png",
+                f"{safe_symbol}_{safe_date}_{index}_exposure.png",
             )
             if export_chart_to_path(dashboard, symbol, date, file_path, "png"):
                 paths.append(file_path)
+            else:
+                print(f"Skipped chart export: {symbol} {date}")
         return paths
 
     def _cleanup_temp_files(paths: List[str]) -> None:

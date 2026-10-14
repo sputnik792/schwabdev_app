@@ -529,6 +529,30 @@ class Dashboard(ctk.CTkFrame):
             width=150
         )
         gamma_profile_btn.pack(pady=5)
+
+        def open_tape_tools():
+            from ui.dashboard.tape_tools import show_tape_tools_window
+            show_tape_tools_window(self)
+
+        tape_tools_btn = ctk.CTkButton(
+            quantitative_frame,
+            text="Tape Tools",
+            command=open_tape_tools,
+            width=150,
+        )
+        tape_tools_btn.pack(pady=5)
+
+        def open_semi_book():
+            from ui.dashboard.tape_tools import show_semi_book_window
+            show_semi_book_window(self)
+
+        semi_book_btn = ctk.CTkButton(
+            quantitative_frame,
+            text="Semi Book",
+            command=open_semi_book,
+            width=150,
+        )
+        semi_book_btn.pack(pady=5)
         
         # Pricing column
         pricing_frame = ctk.CTkFrame(columns_frame)

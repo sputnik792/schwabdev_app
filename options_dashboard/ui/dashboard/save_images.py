@@ -89,12 +89,50 @@ def chart_list_label(chart: dict) -> str:
     return f"{chart['symbol']} / {chart['date']} / {time_part}"
 
 
+def safe_filename_component(text: str) -> str:
+    """Make a ticker/date string safe for Windows filenames (BRK/B -> BRK-B)."""
+    invalid = '\\/:*?"<>|'
+    cleaned = "".join("-" if ch in invalid else ch for ch in (text or ""))
+    return cleaned.strip(" .") or "chart"
+
+
+def ticker_lookup_keys(symbol: str) -> list:
+    """Possible ticker_data keys for class-share symbols like BRK/B."""
+    symbol = (symbol or "").strip()
+    if not symbol:
+        return []
+
+    keys = [symbol]
+    for alt in (
+        symbol.replace("/", "."),
+        symbol.replace("/", "-"),
+        symbol.replace(".", "/"),
+        symbol.replace(".", "-"),
+        symbol.replace("-", "/"),
+        symbol.replace("-", "."),
+    ):
+        if alt and alt not in keys:
+            keys.append(alt)
+
+    for key in list(keys):
+        csv_key = f"{key} (CSV)"
+        if csv_key not in keys:
+            keys.append(csv_key)
+    return keys
+
+
+def resolve_ticker_state(self, symbol):
+    """Return (resolved_key, state) for a displayed ticker symbol."""
+    for key in ticker_lookup_keys(symbol):
+        state = self.ticker_data.get(key) if hasattr(self, "ticker_data") else None
+        if state:
+            return key, state
+    return None, None
+
+
 def find_matching_expiration(self, symbol, date):
     """Find full expiration key for a symbol and date."""
-    if symbol not in self.ticker_data:
-        return None
-
-    state = self.ticker_data[symbol]
+    _key, state = resolve_ticker_state(self, symbol)
     if not state or not state.exp_data_map:
         return None
 
@@ -107,11 +145,12 @@ def find_matching_expiration(self, symbol, date):
 
 def render_chart_figure(self, symbol, date):
     """Build a matplotlib Figure for the given symbol and expiration date."""
+    resolved_key, _state = resolve_ticker_state(self, symbol)
     matching_exp = find_matching_expiration(self, symbol, date)
-    if not matching_exp:
+    if not resolved_key or not matching_exp:
         return None
 
-    chart_data = regenerate_chart_data(self, symbol, matching_exp)
+    chart_data = regenerate_chart_data(self, resolved_key, matching_exp)
     if not chart_data:
         return None
 
@@ -145,6 +184,16 @@ def render_chart_figure(self, symbol, date):
         label="PUT",
     )
     ax.axhline(0, color="black", linewidth=1)
+
+    spot = chart_data.get("spot")
+    if spot:
+        ax.axvline(
+            spot,
+            color="#3b82f6",
+            linestyle="--",
+            linewidth=1.5,
+            label=f"Spot {spot:.2f}",
+        )
 
     if chart_data["zero_gamma"]:
         ax.axvline(
@@ -185,7 +234,8 @@ def export_chart_to_path(self, symbol, date, file_path, file_format="png"):
         else:
             fig.savefig(file_path, format="png", dpi=150, bbox_inches="tight")
         return True
-    except Exception:
+    except Exception as exc:
+        print(f"Failed to export chart for {symbol} {date} -> {file_path}: {exc}")
         return False
 
 
@@ -346,8 +396,9 @@ def save_individual_chart(self, symbol, date, file_format):
     """Save an individual chart to file"""
     ext_map = {"png": ".png", "jpeg": ".jpg", "pdf": ".pdf"}
     ext = ext_map.get(file_format, ".png")
-    safe_date = date.replace("/", "-").replace(":", "-")
-    default_filename = f"{symbol}_{safe_date}_exposure{ext}"
+    safe_symbol = safe_filename_component(symbol)
+    safe_date = safe_filename_component(date)
+    default_filename = f"{safe_symbol}_{safe_date}_exposure{ext}"
 
     file_path = filedialog.asksaveasfilename(
         defaultextension=ext,

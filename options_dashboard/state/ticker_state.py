@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict
 import pandas as pd
 import datetime
@@ -11,3 +11,4 @@ class TickerState:
     last_updated: datetime.datetime
     is_csv: bool = False
     strike_count_label: str = "40"
+    quote: Dict = field(default_factory=dict)

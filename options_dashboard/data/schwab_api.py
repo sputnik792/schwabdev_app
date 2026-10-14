@@ -1,6 +1,8 @@
 import pandas as pd
 from typing import Optional
 
+from models.greeks import normalize_iv, to_float
+
 STRIKE_COUNT_OPTIONS = ["10", "20", "40", "60", "80", "All"]
 DEFAULT_STRIKE_COUNT_LABEL = "40"
 
@@ -20,25 +22,101 @@ def safe_call(fn, *args, **kwargs):
         raise
 
 
-def fetch_stock_price(client, symbol):
+def _empty_quote(price=0.0):
+    return {
+        "price": float(price or 0.0),
+        "close": 0.0,
+        "open": 0.0,
+        "high": 0.0,
+        "low": 0.0,
+        "change": 0.0,
+        "change_pct": 0.0,
+        "volume": 0.0,
+        "mark": 0.0,
+    }
+
+
+def fetch_stock_quote(client, symbol):
+    """Full quote snapshot used by Tape Tools and price refresh."""
     try:
         resp = safe_call(client.quotes, symbol)
         data = resp.json()
+        sym = data.get(symbol.upper(), {}) or {}
+        q = sym.get("quote") or {}
+        regular = sym.get("regular") or {}
+        extended = sym.get("extended") or {}
 
-        sym = data.get(symbol.upper(), {})
-        price = (
-            sym.get("quote", {}).get("lastPrice")
-            or sym.get("regular", {}).get("regularMarketLastPrice")
-            or sym.get("extended", {}).get("lastPrice")
-            or sym.get("quote", {}).get("mark")
-            or 0.0
+        price = to_float(
+            q.get("lastPrice")
+            or regular.get("regularMarketLastPrice")
+            or extended.get("lastPrice")
+            or q.get("mark")
         )
-        return float(price)
+        close = to_float(
+            q.get("closePrice")
+            or regular.get("regularMarketPreviousClose")
+            or q.get("previousClose")
+        )
+        open_px = to_float(q.get("openPrice") or regular.get("regularMarketOpen"))
+        high = to_float(q.get("highPrice") or regular.get("regularMarketDayHigh"))
+        low = to_float(q.get("lowPrice") or regular.get("regularMarketDayLow"))
+        volume = to_float(q.get("totalVolume") or regular.get("regularMarketVolume"))
+        mark = to_float(q.get("mark") or price)
+        change = to_float(q.get("netChange"))
+        if change == 0.0 and close > 0 and price > 0:
+            change = price - close
+        change_pct = to_float(
+            q.get("netPercentChange")
+            or q.get("netPercentChangeInDouble")
+        )
+        if change_pct == 0.0 and close > 0:
+            change_pct = (change / close) * 100.0
 
+        return {
+            "price": price,
+            "close": close,
+            "open": open_px,
+            "high": high,
+            "low": low,
+            "change": change,
+            "change_pct": change_pct,
+            "volume": volume,
+            "mark": mark,
+        }
+    except RuntimeError:
+        raise
+    except Exception:
+        return _empty_quote()
+
+
+def fetch_stock_price(client, symbol):
+    try:
+        return float(fetch_stock_quote(client, symbol).get("price") or 0.0)
     except RuntimeError:
         raise
     except Exception:
         return 0.0
+
+
+def _option_fields(opt, side):
+    bid = to_float(opt.get("bid"))
+    ask = to_float(opt.get("ask"))
+    mark = to_float(opt.get("mark"))
+    if mark <= 0 and bid > 0 and ask > 0:
+        mark = (bid + ask) / 2.0
+    suffix = "Call" if side == "CALL" else "Put"
+    return {
+        "Strike": None,
+        f"Bid_{suffix}": bid,
+        f"Ask_{suffix}": ask,
+        f"Mark_{suffix}": mark,
+        f"Delta_{suffix}": to_float(opt.get("delta")),
+        f"Theta_{suffix}": to_float(opt.get("theta")),
+        f"Gamma_{suffix}": to_float(opt.get("gamma")),
+        f"IV_{suffix}": normalize_iv(opt.get("volatility", 0.0)),
+        f"OI_{suffix}": to_float(opt.get("openInterest")),
+        f"Volume_{suffix}": to_float(opt.get("totalVolume")),
+    }
 
 
 def fetch_option_chain(client, symbol, strike_count: Optional[int] = 40):
@@ -68,30 +146,16 @@ def fetch_option_chain(client, symbol, strike_count: Optional[int] = 40):
             if exp in calls:
                 for strike, opts in calls[exp].items():
                     opt = opts[0]
-                    call_rows.append({
-                        "Strike": float(strike),
-                        "Bid_Call": opt.get("bid", 0.0),
-                        "Ask_Call": opt.get("ask", 0.0),
-                        "Delta_Call": opt.get("delta", 0.0),
-                        "Theta_Call": opt.get("theta", 0.0),
-                        "Gamma_Call": opt.get("gamma", 0.0),
-                        "IV_Call": opt.get("volatility", 0.0),
-                        "OI_Call": opt.get("openInterest", 0.0),
-                    })
+                    row = _option_fields(opt, "CALL")
+                    row["Strike"] = float(strike)
+                    call_rows.append(row)
 
             if exp in puts:
                 for strike, opts in puts[exp].items():
                     opt = opts[0]
-                    put_rows.append({
-                        "Strike": float(strike),
-                        "Bid_Put": opt.get("bid", 0.0),
-                        "Ask_Put": opt.get("ask", 0.0),
-                        "Delta_Put": opt.get("delta", 0.0),
-                        "Theta_Put": opt.get("theta", 0.0),
-                        "Gamma_Put": opt.get("gamma", 0.0),
-                        "IV_Put": opt.get("volatility", 0.0),
-                        "OI_Put": opt.get("openInterest", 0.0),
-                    })
+                    row = _option_fields(opt, "PUT")
+                    row["Strike"] = float(strike)
+                    put_rows.append(row)
 
             df_calls = pd.DataFrame(call_rows)
             df_puts  = pd.DataFrame(put_rows)
